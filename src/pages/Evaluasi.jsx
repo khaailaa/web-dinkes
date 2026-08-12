@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { bidangList, getBidangColor, getProgressColor } from '../data/initialData';
 import { usePrograms, useKegiatan } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
@@ -14,6 +15,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineEleme
 
 export default function Evaluasi() {
   const { state } = useApp();
+  const navigate = useNavigate();
   const { currentUser } = state;
   const userBidang = currentUser?.bidang;
 
@@ -32,10 +34,10 @@ export default function Evaluasi() {
     const tercapai = scopedPrograms.filter(p => p.status === 'Tercapai').length;
     const proses = scopedPrograms.filter(p => p.status === 'Dalam Proses').length;
     const belum = scopedPrograms.filter(p => p.status === 'Belum Tercapai').length;
-    const avgCapaian = totalProg > 0 ? Math.round(scopedPrograms.reduce((s, p) => s + (p.capaian || 0), 0) / totalProg) : 0;
+    const avgCapaian = totalProg > 0 ? Math.min(100, Math.round(scopedPrograms.reduce((s, p) => s + Math.min(p.capaian || 0, 100), 0) / totalProg)) : 0;
     const totalPagu = scopedPrograms.reduce((s, p) => s + (p.anggaranPagu || 0), 0);
     const totalReal = scopedPrograms.reduce((s, p) => s + (p.anggaranRealisasi || (p.anggaranPagu ? p.anggaranPagu * 0.85 : 0)), 0);
-    const avgSerapan = totalPagu > 0 ? Math.round((totalReal / totalPagu) * 100) : 85;
+    const avgSerapan = totalPagu > 0 ? Math.min(100, Math.round((totalReal / totalPagu) * 100)) : 85;
     return { totalProg, tercapai, proses, belum, avgCapaian, avgSerapan };
   }, [scopedPrograms]);
 
@@ -47,12 +49,12 @@ export default function Evaluasi() {
       const jmlProg = progs.length;
       const jmlKgt = kgts.length;
 
-      const avgCapaian = jmlProg > 0 ? Math.round(progs.reduce((s, p) => s + (p.capaian || 85), 0) / jmlProg) : 85;
+      const avgCapaian = jmlProg > 0 ? Math.min(100, Math.round(progs.reduce((s, p) => s + Math.min(p.capaian || 85, 100), 0) / jmlProg)) : 85;
       const pagu = progs.reduce((s, p) => s + (p.anggaranPagu || 0), 0);
       const real = progs.reduce((s, p) => s + (p.anggaranRealisasi || (p.anggaranPagu ? p.anggaranPagu * 0.85 : 0)), 0);
-      const serapan = pagu > 0 ? Math.round((real / pagu) * 100) : 80;
+      const serapan = pagu > 0 ? Math.min(100, Math.round((real / pagu) * 100)) : 80;
 
-      const nilaiEvaluasi = Math.round((avgCapaian * 0.6) + (serapan * 0.4));
+      const nilaiEvaluasi = Math.min(100, Math.round((avgCapaian * 0.6) + (serapan * 0.4)));
 
       let predikat = 'Kurang';
       let predikatColor = 'red';
@@ -89,7 +91,7 @@ export default function Evaluasi() {
     responsive: true,
     maintainAspectRatio: false,
     plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, font: { family: 'Inter', size: 11 } } } },
-    scales: { r: { beginAtZero: true, max: 120, ticks: { stepSize: 30, display: false } } },
+    scales: { r: { beginAtZero: true, max: 100, ticks: { stepSize: 25, display: false } } },
   };
 
   // Bar Data (Capaian vs Target per bidang)
@@ -110,7 +112,7 @@ export default function Evaluasi() {
     maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      y: { beginAtZero: true, max: 120, ticks: { callback: v => `${v}%`, font: { size: 10 } }, grid: { color: '#f0f0f0' } },
+      y: { beginAtZero: true, max: 100, ticks: { callback: v => `${v}%`, font: { size: 10 } }, grid: { color: '#f0f0f0' } },
       x: { ticks: { font: { size: 11 } }, grid: { display: false } },
     },
   };
@@ -177,31 +179,31 @@ export default function Evaluasi() {
             marginBottom: '24px',
             boxShadow: 'var(--shadow-md)'
           }}>
-            <div style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '16px' }}>
+            <div onClick={() => navigate('/monitoring')} style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '16px', cursor: 'pointer', borderRadius: '8px', padding: '12px 16px', transition: 'background 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.background = ''; }} title="Klik untuk melihat Monitoring">
               <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--teal)' }}>{summary.avgCapaian}%</div>
               <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Capaian Kinerja</div>
               <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)' }}>Target: 90%</div>
             </div>
 
-            <div style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '16px' }}>
+            <div onClick={() => navigate('/program')} style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '16px', cursor: 'pointer', borderRadius: '8px', padding: '12px 16px', transition: 'background 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.background = ''; }} title="Klik untuk melihat Program">
               <div style={{ fontSize: '2.2rem', fontWeight: 800 }}>{summary.tercapai}</div>
               <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Program Tercapai</div>
               <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)' }}>dari {summary.totalProg} program</div>
             </div>
 
-            <div style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '16px' }}>
+            <div onClick={() => navigate('/program')} style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '16px', cursor: 'pointer', borderRadius: '8px', padding: '12px 16px', transition: 'background 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.background = ''; }} title="Klik untuk melihat Program">
               <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--orange)' }}>{summary.proses}</div>
               <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Dalam Proses</div>
               <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)' }}>perlu percepatan</div>
             </div>
 
-            <div style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '16px' }}>
+            <div onClick={() => navigate('/evaluasi')} style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '16px', cursor: 'pointer', borderRadius: '8px', padding: '12px 16px', transition: 'background 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.background = ''; }} title="Klik untuk melihat Evaluasi">
               <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--red)' }}>{summary.belum}</div>
               <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Belum Tercapai</div>
               <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)' }}>perlu intervensi</div>
             </div>
 
-            <div>
+            <div onClick={() => navigate('/program')} style={{ cursor: 'pointer', borderRadius: '8px', padding: '12px 16px', transition: 'background 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }} onMouseLeave={e => { e.currentTarget.style.background = ''; }} title="Klik untuk melihat Program">
               <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--blue)' }}>{summary.avgSerapan}%</div>
               <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Serapan Anggaran</div>
               <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)' }}>rata-rata serapan</div>

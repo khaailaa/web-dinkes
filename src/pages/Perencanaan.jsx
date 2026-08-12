@@ -20,6 +20,7 @@ const emptyForm = {
   tahun: 2025,
   bidang: 'Kesmas',
   anggaranPagu: 0,
+  capaian: 75,
   penanggungJawab: 'Dinas Kesehatan Kab. Garut',
   status: 'Dalam Proses',
 };
@@ -36,29 +37,47 @@ export default function Perencanaan() {
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua');
+  const [filterBidang, setFilterBidang] = useState('Semua');
+  const [filterAnggaran, setFilterAnggaran] = useState('Semua');
   const [saving, setSaving] = useState(false);
 
-  // Filter per bidang if assigned to a specific bidang
-  const scopedPerencanaan = useMemo(() => {
-    if (!userBidang || userBidang === 'Semua') return perencanaan;
-    return perencanaan.filter(p => !p.bidang || p.bidang === userBidang);
-  }, [perencanaan, userBidang]);
+  // Base data filtered by selected bidang (available for all roles)
+  const bidangFilteredData = useMemo(() => {
+    if (!filterBidang || filterBidang === 'Semua') return perencanaan;
+    return perencanaan.filter(p => p.bidang === filterBidang);
+  }, [perencanaan, filterBidang]);
 
   const stats = useMemo(() => ({
-    total: scopedPerencanaan.length,
-    tercapai: scopedPerencanaan.filter(p => p.status === 'Tercapai').length,
-    proses: scopedPerencanaan.filter(p => p.status === 'Dalam Proses').length,
-    totalAnggaran: scopedPerencanaan.reduce((s, p) => s + (p.anggaranPagu || 0), 0),
-  }), [scopedPerencanaan]);
+    total: bidangFilteredData.length,
+    tercapai: bidangFilteredData.filter(p => p.status === 'Tercapai').length,
+    proses: bidangFilteredData.filter(p => p.status === 'Dalam Proses').length,
+    belum: bidangFilteredData.filter(p => p.status === 'Belum Tercapai').length,
+    totalAnggaran: bidangFilteredData.reduce((s, p) => s + (p.anggaranPagu || p.anggaran || 0), 0),
+  }), [bidangFilteredData]);
 
   const filtered = useMemo(() => {
-    return scopedPerencanaan.filter(p => {
-      const matchSearch = p.nama.toLowerCase().includes(search.toLowerCase()) ||
+    let result = bidangFilteredData.filter(p => {
+      const matchSearch = (p.nama || '').toLowerCase().includes(search.toLowerCase()) ||
         (p.kode && p.kode.toLowerCase().includes(search.toLowerCase()));
       const matchStatus = filterStatus === 'Semua' || p.status === filterStatus;
-      return matchSearch && matchStatus;
+      
+      let matchAnggaran = true;
+      const val = p.anggaranPagu || p.anggaran || 0;
+      if (filterAnggaran === 'small') matchAnggaran = val < 100000000;
+      else if (filterAnggaran === 'medium') matchAnggaran = val >= 100000000 && val <= 1000000000;
+      else if (filterAnggaran === 'large') matchAnggaran = val > 1000000000;
+
+      return matchSearch && matchStatus && matchAnggaran;
     });
-  }, [scopedPerencanaan, search, filterStatus]);
+
+    if (filterAnggaran === 'desc') {
+      result = [...result].sort((a, b) => (b.anggaranPagu || b.anggaran || 0) - (a.anggaranPagu || a.anggaran || 0));
+    } else if (filterAnggaran === 'asc') {
+      result = [...result].sort((a, b) => (a.anggaranPagu || a.anggaran || 0) - (b.anggaranPagu || b.anggaran || 0));
+    }
+
+    return result;
+  }, [bidangFilteredData, search, filterStatus, filterAnggaran]);
 
   const openAdd = () => {
     setEditItem(null);
@@ -121,10 +140,38 @@ export default function Perencanaan() {
       />
 
       <div className="stats-grid">
-        <StatCard label="TOTAL PERENCANAAN" value={stats.total} color="blue" icon={<FileText size={24} />} />
-        <StatCard label="TERCAPAI" value={stats.tercapai} color="green" icon={<CheckCircle2 size={24} />} />
-        <StatCard label="DALAM PROSES" value={stats.proses} color="orange" icon={<Clock size={24} />} />
-        <StatCard label="TOTAL ANGGARAN" value={formatAnggaranShort(stats.totalAnggaran)} color="teal" icon={<Wallet size={24} />} />
+        <StatCard
+          label="TOTAL PERENCANAAN"
+          value={stats.total}
+          color="blue"
+          icon={<FileText size={24} />}
+          onClick={() => setFilterStatus('Semua')}
+          active={filterStatus === 'Semua'}
+        />
+        <StatCard
+          label="TERCAPAI"
+          value={stats.tercapai}
+          color="green"
+          icon={<CheckCircle2 size={24} />}
+          onClick={() => setFilterStatus('Tercapai')}
+          active={filterStatus === 'Tercapai'}
+        />
+        <StatCard
+          label="DALAM PROSES"
+          value={stats.proses}
+          color="orange"
+          icon={<Clock size={24} />}
+          onClick={() => setFilterStatus('Dalam Proses')}
+          active={filterStatus === 'Dalam Proses'}
+        />
+        <StatCard
+          label="BELUM TERCAPAI"
+          value={stats.belum}
+          color="red"
+          icon={<Wallet size={24} />}
+          onClick={() => setFilterStatus('Belum Tercapai')}
+          active={filterStatus === 'Belum Tercapai'}
+        />
       </div>
 
       {/* Filters */}
@@ -137,6 +184,10 @@ export default function Perencanaan() {
             onFilterChange={setFilterStatus}
             filterOptions={statusList}
             filterLabel="Semua Status"
+            bidangValue={filterBidang}
+            onBidangChange={setFilterBidang}
+            anggaranValue={filterAnggaran}
+            onAnggaranChange={setFilterAnggaran}
             placeholder="Cari nama atau kode perencanaan..."
           />
         </div>
@@ -157,37 +208,57 @@ export default function Perencanaan() {
                   <th>INDIKATOR</th>
                   <th>TARGET</th>
                   <th>ANGGARAN PAGU</th>
+                  <th>KETERCAPAIAN</th>
                   <th>STATUS</th>
                   <th>AKSI</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item) => (
-                  <tr key={item.id}>
-                    <td><span className="code-badge">{item.kode || '-'}</span></td>
-                    <td>
-                      <div style={{ fontWeight: 600, color: '#2196f3' }}>{item.nama}</div>
-                    </td>
-                    <td><div style={{ fontSize: '0.82rem' }}>{item.sasaran || item.tujuan || '-'}</div></td>
-                    <td><div style={{ fontSize: '0.82rem' }}>{item.indikator || 'SAKIP'}</div></td>
-                    <td><div style={{ fontSize: '0.82rem', textAlign: 'center' }}>{item.target || '-'}</div></td>
-                    <td>{formatAnggaranShort(item.anggaranPagu)}</td>
-                    <td><StatusBadge status={item.status} /></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button className="btn btn-outline btn-sm" onClick={() => openEdit(item)}>
-                          <Edit3 size={14} /> Edit
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => setShowDelete(item.id)}>
-                          <Trash2 size={14} /> Hapus
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((item) => {
+                  const pct = (item.capaian !== undefined && item.capaian !== null && item.capaian !== '')
+                    ? Number(item.capaian)
+                    : (item.status === 'Tercapai' ? 100 : item.status === 'Belum Tercapai' ? 45 : 75);
+                  
+                  let barColor = '#4caf50';
+                  if (pct < 50) barColor = '#f44336';
+                  else if (pct < 75) barColor = '#ff9800';
+                  else if (pct < 90) barColor = '#2196f3';
+
+                  return (
+                    <tr key={item.id}>
+                      <td><span className="code-badge">{item.kode || '-'}</span></td>
+                      <td>
+                        <div style={{ fontWeight: 600, color: '#2196f3' }}>{item.nama}</div>
+                      </td>
+                      <td><div style={{ fontSize: '0.82rem' }}>{item.sasaran || item.tujuan || '-'}</div></td>
+                      <td><div style={{ fontSize: '0.82rem' }}>{item.indikator || 'SAKIP'}</div></td>
+                      <td><div style={{ fontSize: '0.82rem', textAlign: 'center' }}>{item.target || '-'}</div></td>
+                      <td>{formatAnggaranShort(item.anggaranPagu)}</td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '100px' }}>
+                          <div style={{ flex: 1, height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(Math.max(pct, 0), 100)}%`, background: barColor, borderRadius: '4px' }} />
+                          </div>
+                          <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b', minWidth: '38px', textAlign: 'right' }}>{pct}%</span>
+                        </div>
+                      </td>
+                      <td><StatusBadge status={item.status} /></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button className="btn btn-outline btn-sm" onClick={() => openEdit(item)}>
+                            <Edit3 size={14} /> Edit
+                          </button>
+                          <button className="btn btn-danger btn-sm" onClick={() => setShowDelete(item.id)}>
+                            <Trash2 size={14} /> Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={9}>
                       <div className="empty-state">
                         <div className="icon">📋</div>
                         <h3>Tidak ada data</h3>
@@ -259,6 +330,11 @@ export default function Perencanaan() {
             <label className="form-label">Anggaran Pagu (Rp)</label>
             <input className="form-input" type="number" value={form.anggaranPagu}
               onChange={e => setForm({ ...form, anggaranPagu: parseInt(e.target.value) || 0 })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Capaian / Ketercapaian (%)</label>
+            <input className="form-input" type="number" min="0" max="100" value={form.capaian || 0}
+              onChange={e => setForm({ ...form, capaian: parseInt(e.target.value) || 0 })} />
           </div>
           <div className="form-group">
             <label className="form-label">Status</label>

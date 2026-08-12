@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import StatusBadge from '../components/StatusBadge';
 import RoleQuickSwitcher from '../components/RoleQuickSwitcher';
@@ -14,6 +15,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tool
 
 export default function Monitoring() {
   const { state } = useApp();
+  const navigate = useNavigate();
   const { programs, kegiatan, subKegiatan, perencanaan, currentUser } = state;
   const userBidang = currentUser?.bidang;
 
@@ -40,8 +42,8 @@ export default function Monitoring() {
   const stats = useMemo(() => {
     const totalPagu = scopedPrograms.reduce((s, p) => s + (p.anggaranPagu || 0), 0);
     const totalRealisasi = scopedPrograms.reduce((s, p) => s + (p.anggaranRealisasi || 0), 0);
-    const avgCapaian = scopedPrograms.length > 0 ? Math.round(scopedPrograms.reduce((s, p) => s + (p.capaian || 0), 0) / scopedPrograms.length) : 0;
-    const realisasiPct = totalPagu > 0 ? Math.round((totalRealisasi / totalPagu) * 100) : 0;
+    const avgCapaian = scopedPrograms.length > 0 ? Math.min(100, Math.round(scopedPrograms.reduce((s, p) => s + Math.min(p.capaian || 0, 100), 0) / scopedPrograms.length)) : 0;
+    const realisasiPct = totalPagu > 0 ? Math.min(100, Math.round((totalRealisasi / totalPagu) * 100)) : 0;
     return { totalPagu, totalRealisasi, avgCapaian, realisasiPct };
   }, [scopedPrograms]);
 
@@ -62,7 +64,7 @@ export default function Monitoring() {
   const bidangBarData = useMemo(() => {
     const dataPerBidang = bidangList.map(b => {
       const progs = programs.filter(p => p.bidang === b);
-      return progs.length > 0 ? Math.round(progs.reduce((s, p) => s + p.capaian, 0) / progs.length) : 0;
+      return progs.length > 0 ? Math.min(100, Math.round(progs.reduce((s, p) => s + Math.min(p.capaian || 0, 100), 0) / progs.length)) : 0;
     });
 
     return {
@@ -88,8 +90,8 @@ export default function Monitoring() {
     scales: {
       y: {
         beginAtZero: true,
-        max: 120,
-        ticks: { stepSize: 30, callback: (v) => `${v}%`, font: { size: 10, family: 'Inter' } },
+        max: 100,
+        ticks: { stepSize: 25, callback: (v) => `${v}%`, font: { size: 10, family: 'Inter' } },
         grid: { color: '#f0f0f0' },
       },
       x: {
@@ -135,31 +137,31 @@ export default function Monitoring() {
 
       {/* Top 5 Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/perencanaan')} style={{ padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Perencanaan">
           <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>📋</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>{scopedPerencanaan.length}</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Perencanaan Aktif</div>
         </div>
 
-        <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/program')} style={{ padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Program">
           <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>📁</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>{scopedPrograms.length}</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Total Program</div>
         </div>
 
-        <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/kegiatan')} style={{ padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Kegiatan">
           <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>📌</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>{scopedKegiatan.length}</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Total Kegiatan</div>
         </div>
 
-        <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/sub-kegiatan')} style={{ padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Sub Kegiatan">
           <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>📎</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>{scopedSubKegiatan.length}</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Total Sub Kegiatan</div>
         </div>
 
-        <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/evaluasi')} style={{ padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Evaluasi">
           <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>📊</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--teal)' }}>{stats.avgCapaian}%</div>
           <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Rata-rata Capaian</div>
@@ -262,9 +264,9 @@ export default function Monitoring() {
                     <td>
                       <div className="progress-bar">
                         <div className="progress-track" style={{ minWidth: '60px' }}>
-                          <div className={`progress-fill ${getProgressColor(item.capaian)}`} style={{ width: `${Math.min(item.capaian, 100)}%` }} />
+                          <div className={`progress-fill ${getProgressColor(Math.min(item.capaian || 0, 100))}`} style={{ width: `${Math.min(item.capaian || 0, 100)}%` }} />
                         </div>
-                        <span className="progress-label" style={{ fontWeight: 700 }}>{item.capaian}%</span>
+                        <span className="progress-label" style={{ fontWeight: 700 }}>{Math.min(item.capaian || 0, 100)}%</span>
                       </div>
                     </td>
                     <td>

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import RoleQuickSwitcher from '../components/RoleQuickSwitcher';
 import { formatAnggaranShort, bidangList, getProgressColor } from '../data/initialData';
@@ -16,6 +17,7 @@ ChartJS.register(
 
 export default function DashboardAnalitik() {
   const { state } = useApp();
+  const navigate = useNavigate();
   const { programs, kegiatan, subKegiatan, perencanaan, currentUser } = state;
   const userBidang = currentUser?.bidang;
 
@@ -29,7 +31,7 @@ export default function DashboardAnalitik() {
 
   const stats = useMemo(() => {
     const totalPagu = filteredPrograms.reduce((s, p) => s + (p.anggaranPagu || 0), 0);
-    const avgCapaian = filteredPrograms.length > 0 ? Math.round(filteredPrograms.reduce((s, p) => s + p.capaian, 0) / filteredPrograms.length) : 0;
+    const avgCapaian = filteredPrograms.length > 0 ? Math.min(100, Math.round(filteredPrograms.reduce((s, p) => s + Math.min(p.capaian || 0, 100), 0) / filteredPrograms.length)) : 0;
     return {
       perencanaan: perencanaan.length,
       program: filteredPrograms.length,
@@ -54,7 +56,7 @@ export default function DashboardAnalitik() {
     const activeBidang = selectedBidang === 'Semua' ? bidangList : [selectedBidang];
     const capaianData = activeBidang.map(b => {
       const progs = programs.filter(p => p.bidang === b);
-      return progs.length > 0 ? Math.round(progs.reduce((s, p) => s + p.capaian, 0) / progs.length) : 0;
+      return progs.length > 0 ? Math.min(100, Math.round(progs.reduce((s, p) => s + Math.min(p.capaian || 0, 100), 0) / progs.length)) : 0;
     });
     const realisasiData = activeBidang.map(b => {
       const progs = programs.filter(p => p.bidang === b);
@@ -95,7 +97,7 @@ export default function DashboardAnalitik() {
         display: true,
         position: 'left',
         beginAtZero: true,
-        max: 120,
+        max: 100,
         ticks: { callback: v => `${v}%`, font: { size: 10 } },
         grid: { color: '#f0f0f0' },
       },
@@ -171,7 +173,7 @@ export default function DashboardAnalitik() {
     maintainAspectRatio: false,
     plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, font: { family: 'Inter', size: 11 } } } },
     scales: {
-      y: { beginAtZero: true, max: 120, ticks: { callback: v => v + '%', font: { size: 10 } }, grid: { color: '#f0f0f0' } },
+      y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%', font: { size: 10 } }, grid: { color: '#f0f0f0' } },
       x: { grid: { display: false } },
     },
   };
@@ -243,32 +245,32 @@ export default function DashboardAnalitik() {
 
       {/* Top 6 Stat Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div className="card" style={{ padding: '16px 20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/perencanaan')} style={{ padding: '16px 20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Perencanaan">
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)' }}>{stats.perencanaan}</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Total Perencanaan</div>
         </div>
 
-        <div className="card" style={{ padding: '16px 20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/program')} style={{ padding: '16px 20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Program">
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)' }}>{stats.program}</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Total Program</div>
         </div>
 
-        <div className="card" style={{ padding: '16px 20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/kegiatan')} style={{ padding: '16px 20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Kegiatan">
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)' }}>{stats.kegiatan}</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Total Kegiatan</div>
         </div>
 
-        <div className="card" style={{ padding: '16px 20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/sub-kegiatan')} style={{ padding: '16px 20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Sub Kegiatan">
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)' }}>{stats.subKegiatan}</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Total Sub Kegiatan</div>
         </div>
 
-        <div className="card" style={{ padding: '16px 20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/evaluasi')} style={{ padding: '16px 20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Evaluasi">
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--blue)' }}>{stats.avgCapaian}%</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Avg Capaian</div>
         </div>
 
-        <div className="card" style={{ padding: '16px 20px', textAlign: 'center' }}>
+        <div className="card" onClick={() => navigate('/program')} style={{ padding: '16px 20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Program">
           <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)' }}>{formatAnggaranShort(stats.totalPagu)}</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Total Pagu</div>
         </div>
@@ -392,8 +394,8 @@ export default function DashboardAnalitik() {
                       </div>
                     </div>
                   </div>
-                  <span style={{ fontWeight: 700, fontSize: '0.9rem', color: p.capaian >= 90 ? 'var(--green)' : 'var(--orange)' }}>
-                    {p.capaian}%
+                  <span style={{ fontWeight: 700, fontSize: '0.9rem', color: Math.min(p.capaian, 100) >= 90 ? 'var(--green)' : 'var(--orange)' }}>
+                    {Math.min(p.capaian, 100)}%
                   </span>
                 </div>
               ))}
@@ -429,8 +431,8 @@ export default function DashboardAnalitik() {
                       </div>
                     </div>
                   </div>
-                  <span style={{ fontWeight: 700, fontSize: '0.9rem', color: p.capaian < 80 ? 'var(--orange)' : 'var(--green)' }}>
-                    {p.capaian}%
+                  <span style={{ fontWeight: 700, fontSize: '0.9rem', color: Math.min(p.capaian, 100) < 80 ? 'var(--orange)' : 'var(--green)' }}>
+                    {Math.min(p.capaian, 100)}%
                   </span>
                 </div>
               ))}

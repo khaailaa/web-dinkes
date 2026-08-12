@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
+import FilterSearchBar from '../components/FilterSearchBar';
 import { formatAnggaranShort, statusList } from '../data/initialData';
 import { usePrograms, usePerencanaan } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
@@ -35,29 +36,46 @@ export default function Program() {
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua');
+  const [filterBidang, setFilterBidang] = useState('Semua');
+  const [filterAnggaran, setFilterAnggaran] = useState('Semua');
   const [saving, setSaving] = useState(false);
 
-  // Filter per bidang if assigned to a specific bidang
-  const scopedPrograms = useMemo(() => {
-    if (!userBidang || userBidang === 'Semua') return programs;
-    return programs.filter(p => !p.bidang || p.bidang === userBidang);
-  }, [programs, userBidang]);
+  // Base data filtered by selected bidang (available for all roles)
+  const bidangFilteredData = useMemo(() => {
+    if (!filterBidang || filterBidang === 'Semua') return programs;
+    return programs.filter(p => p.bidang === filterBidang);
+  }, [programs, filterBidang]);
 
   const stats = useMemo(() => ({
-    total: scopedPrograms.length,
-    tercapai: scopedPrograms.filter(p => p.status === 'Tercapai').length,
-    proses: scopedPrograms.filter(p => p.status === 'Dalam Proses').length,
-    belum: scopedPrograms.filter(p => p.status === 'Belum Tercapai').length,
-  }), [scopedPrograms]);
+    total: bidangFilteredData.length,
+    tercapai: bidangFilteredData.filter(p => p.status === 'Tercapai').length,
+    proses: bidangFilteredData.filter(p => p.status === 'Dalam Proses').length,
+    belum: bidangFilteredData.filter(p => p.status === 'Belum Tercapai').length,
+  }), [bidangFilteredData]);
 
   const filtered = useMemo(() => {
-    return scopedPrograms.filter(p => {
-      const matchSearch = p.nama.toLowerCase().includes(search.toLowerCase()) ||
+    let result = bidangFilteredData.filter(p => {
+      const matchSearch = (p.nama || '').toLowerCase().includes(search.toLowerCase()) ||
         (p.kode && p.kode.toLowerCase().includes(search.toLowerCase()));
       const matchStatus = filterStatus === 'Semua' || p.status === filterStatus;
-      return matchSearch && matchStatus;
+
+      let matchAnggaran = true;
+      const val = p.anggaranPagu || p.anggaran || 0;
+      if (filterAnggaran === 'small') matchAnggaran = val < 100000000;
+      else if (filterAnggaran === 'medium') matchAnggaran = val >= 100000000 && val <= 1000000000;
+      else if (filterAnggaran === 'large') matchAnggaran = val > 1000000000;
+
+      return matchSearch && matchStatus && matchAnggaran;
     });
-  }, [scopedPrograms, search, filterStatus]);
+
+    if (filterAnggaran === 'desc') {
+      result = [...result].sort((a, b) => (b.anggaranPagu || b.anggaran || 0) - (a.anggaranPagu || a.anggaran || 0));
+    } else if (filterAnggaran === 'asc') {
+      result = [...result].sort((a, b) => (a.anggaranPagu || a.anggaran || 0) - (b.anggaranPagu || b.anggaran || 0));
+    }
+
+    return result;
+  }, [bidangFilteredData, search, filterStatus, filterAnggaran]);
 
   const openAdd = () => {
     setEditItem(null);
@@ -129,28 +147,56 @@ export default function Program() {
       </div>
 
       <div className="stats-grid">
-        <StatCard label="TOTAL PROGRAM" value={stats.total} color="blue" icon={<FolderKanban size={24} />} />
-        <StatCard label="TERCAPAI" value={stats.tercapai} color="green" icon={<CheckCircle2 size={24} />} />
-        <StatCard label="DALAM PROSES" value={stats.proses} color="orange" icon={<Clock size={24} />} />
-        <StatCard label="BELUM TERCAPAI" value={stats.belum} color="red" icon={<XCircle size={24} />} />
+        <StatCard
+          label="TOTAL PROGRAM"
+          value={stats.total}
+          color="blue"
+          icon={<FolderKanban size={24} />}
+          onClick={() => setFilterStatus('Semua')}
+          active={filterStatus === 'Semua'}
+        />
+        <StatCard
+          label="TERCAPAI"
+          value={stats.tercapai}
+          color="green"
+          icon={<CheckCircle2 size={24} />}
+          onClick={() => setFilterStatus('Tercapai')}
+          active={filterStatus === 'Tercapai'}
+        />
+        <StatCard
+          label="DALAM PROSES"
+          value={stats.proses}
+          color="orange"
+          icon={<Clock size={24} />}
+          onClick={() => setFilterStatus('Dalam Proses')}
+          active={filterStatus === 'Dalam Proses'}
+        />
+        <StatCard
+          label="BELUM TERCAPAI"
+          value={stats.belum}
+          color="red"
+          icon={<XCircle size={24} />}
+          onClick={() => setFilterStatus('Belum Tercapai')}
+          active={filterStatus === 'Belum Tercapai'}
+        />
       </div>
 
       {/* Filters */}
       <div className="card">
         <div className="card-body" style={{ paddingBottom: 0 }}>
-          <div className="filters-row">
-            <div className="filter-search">
-              <Search className="search-icon" size={16} />
-              <input
-                type="text" placeholder="Cari kode atau nama program..."
-                value={search} onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-            <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="Semua">Semua Status</option>
-              {statusList.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
+          <FilterSearchBar
+            searchTerm={search}
+            onSearchChange={setSearch}
+            filterValue={filterStatus}
+            onFilterChange={setFilterStatus}
+            filterOptions={statusList}
+            filterLabel="Semua Status"
+            bidangValue={filterBidang}
+            onBidangChange={setFilterBidang}
+            anggaranValue={filterAnggaran}
+            onAnggaranChange={setFilterAnggaran}
+            placeholder="Cari kode atau nama program..."
+          />
         </div>
 
         <div className="data-table-wrapper">
@@ -170,6 +216,7 @@ export default function Program() {
                   <th>INDIKATOR</th>
                   <th>TARGET</th>
                   <th>ANGGARAN PAGU</th>
+                  <th>KETERCAPAIAN</th>
                   <th>STATUS</th>
                   <th>AKSI</th>
                 </tr>
@@ -179,6 +226,15 @@ export default function Program() {
                   const parentP = perencanaan.find(
                     p => String(p.id) === String(item.perencanaanId) || String(p.tujuanId) === String(item.perencanaanId)
                   );
+
+                  const pct = (item.capaian !== undefined && item.capaian !== null && item.capaian !== '')
+                    ? Number(item.capaian)
+                    : (item.status === 'Tercapai' ? 100 : item.status === 'Belum Tercapai' ? 45 : 75);
+                  
+                  let barColor = '#4caf50';
+                  if (pct < 50) barColor = '#f44336';
+                  else if (pct < 75) barColor = '#ff9800';
+                  else if (pct < 90) barColor = '#2196f3';
 
                   return (
                     <tr key={item.id}>
@@ -195,6 +251,14 @@ export default function Program() {
                       <td><div style={{ fontSize: '0.82rem' }}>{item.indikator || 'SAKIP'}</div></td>
                       <td><div style={{ fontSize: '0.82rem', textAlign: 'center' }}>{item.target || '-'}</div></td>
                       <td>{formatAnggaranShort(item.anggaranPagu)}</td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '100px' }}>
+                          <div style={{ flex: 1, height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(Math.max(pct, 0), 100)}%`, background: barColor, borderRadius: '4px' }} />
+                          </div>
+                          <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b', minWidth: '38px', textAlign: 'right' }}>{pct}%</span>
+                        </div>
+                      </td>
                       <td><StatusBadge status={item.status} /></td>
                       <td>
                         <div style={{ display: 'flex', gap: '6px' }}>
@@ -211,7 +275,7 @@ export default function Program() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={9}>
+                    <td colSpan={10}>
                       <div className="empty-state">
                         <div className="icon">📂</div>
                         <h3>Tidak ada data</h3>
@@ -304,6 +368,11 @@ export default function Program() {
             <label className="form-label">Anggaran Pagu (Rp)</label>
             <input className="form-input" type="number" value={form.anggaranPagu}
               onChange={e => setForm({ ...form, anggaranPagu: parseInt(e.target.value) || 0 })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Capaian / Ketercapaian (%)</label>
+            <input className="form-input" type="number" min="0" max="100" value={form.capaian || 0}
+              onChange={e => setForm({ ...form, capaian: parseInt(e.target.value) || 0 })} />
           </div>
           <div className="form-group">
             <label className="form-label">Status</label>

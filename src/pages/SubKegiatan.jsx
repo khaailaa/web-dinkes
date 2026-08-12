@@ -2,10 +2,11 @@ import { useState, useMemo } from 'react';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
+import FilterSearchBar from '../components/FilterSearchBar';
 import { formatAnggaranShort, statusList } from '../data/initialData';
 import { useSubKegiatan, useKegiatan } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
-import { Plus, Search, Layers, CheckCircle2, Clock, Trash2, Edit3, Loader2 } from 'lucide-react';
+import { Plus, Search, Layers, CheckCircle2, Clock, XCircle, Trash2, Edit3, Loader2 } from 'lucide-react';
 
 const emptyForm = {
   kode: '',
@@ -36,28 +37,46 @@ export default function SubKegiatan() {
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua');
+  const [filterBidang, setFilterBidang] = useState('Semua');
+  const [filterAnggaran, setFilterAnggaran] = useState('Semua');
   const [saving, setSaving] = useState(false);
 
-  // Filter per bidang if assigned to a specific bidang
-  const scopedSubKegiatan = useMemo(() => {
-    if (!userBidang || userBidang === 'Semua') return subKegiatan;
-    return subKegiatan.filter(s => !s.bidang || s.bidang === userBidang);
-  }, [subKegiatan, userBidang]);
+  // Base data filtered by selected bidang (available for all roles)
+  const bidangFilteredData = useMemo(() => {
+    if (!filterBidang || filterBidang === 'Semua') return subKegiatan;
+    return subKegiatan.filter(s => s.bidang === filterBidang);
+  }, [subKegiatan, filterBidang]);
 
   const stats = useMemo(() => ({
-    total: scopedSubKegiatan.length,
-    tercapai: scopedSubKegiatan.filter(s => s.status === 'Tercapai').length,
-    proses: scopedSubKegiatan.filter(s => s.status === 'Dalam Proses').length,
-  }), [scopedSubKegiatan]);
+    total: bidangFilteredData.length,
+    tercapai: bidangFilteredData.filter(s => s.status === 'Tercapai').length,
+    proses: bidangFilteredData.filter(s => s.status === 'Dalam Proses').length,
+    belum: bidangFilteredData.filter(s => s.status === 'Belum Tercapai').length,
+  }), [bidangFilteredData]);
 
   const filtered = useMemo(() => {
-    return scopedSubKegiatan.filter(s => {
-      const matchSearch = s.nama.toLowerCase().includes(search.toLowerCase()) ||
+    let result = bidangFilteredData.filter(s => {
+      const matchSearch = (s.nama || '').toLowerCase().includes(search.toLowerCase()) ||
         (s.kode && s.kode.toLowerCase().includes(search.toLowerCase()));
       const matchStatus = filterStatus === 'Semua' || s.status === filterStatus;
-      return matchSearch && matchStatus;
+
+      let matchAnggaran = true;
+      const val = s.anggaran || s.anggaranPagu || 0;
+      if (filterAnggaran === 'small') matchAnggaran = val < 100000000;
+      else if (filterAnggaran === 'medium') matchAnggaran = val >= 100000000 && val <= 1000000000;
+      else if (filterAnggaran === 'large') matchAnggaran = val > 1000000000;
+
+      return matchSearch && matchStatus && matchAnggaran;
     });
-  }, [scopedSubKegiatan, search, filterStatus]);
+
+    if (filterAnggaran === 'desc') {
+      result = [...result].sort((a, b) => (b.anggaran || b.anggaranPagu || 0) - (a.anggaran || a.anggaranPagu || 0));
+    } else if (filterAnggaran === 'asc') {
+      result = [...result].sort((a, b) => (a.anggaran || a.anggaranPagu || 0) - (b.anggaran || b.anggaranPagu || 0));
+    }
+
+    return result;
+  }, [bidangFilteredData, search, filterStatus, filterAnggaran]);
 
   const openAdd = () => {
     setEditItem(null);
@@ -129,27 +148,56 @@ export default function SubKegiatan() {
       </div>
 
       <div className="stats-grid">
-        <StatCard label="TOTAL SUB KEGIATAN" value={stats.total} color="blue" icon={<Layers size={24} />} />
-        <StatCard label="TERCAPAI" value={stats.tercapai} color="green" icon={<CheckCircle2 size={24} />} />
-        <StatCard label="DALAM PROSES" value={stats.proses} color="orange" icon={<Clock size={24} />} />
+        <StatCard
+          label="TOTAL SUB KEGIATAN"
+          value={stats.total}
+          color="blue"
+          icon={<Layers size={24} />}
+          onClick={() => setFilterStatus('Semua')}
+          active={filterStatus === 'Semua'}
+        />
+        <StatCard
+          label="TERCAPAI"
+          value={stats.tercapai}
+          color="green"
+          icon={<CheckCircle2 size={24} />}
+          onClick={() => setFilterStatus('Tercapai')}
+          active={filterStatus === 'Tercapai'}
+        />
+        <StatCard
+          label="DALAM PROSES"
+          value={stats.proses}
+          color="orange"
+          icon={<Clock size={24} />}
+          onClick={() => setFilterStatus('Dalam Proses')}
+          active={filterStatus === 'Dalam Proses'}
+        />
+        <StatCard
+          label="BELUM TERCAPAI"
+          value={stats.belum}
+          color="red"
+          icon={<XCircle size={24} />}
+          onClick={() => setFilterStatus('Belum Tercapai')}
+          active={filterStatus === 'Belum Tercapai'}
+        />
       </div>
 
       {/* Filters */}
       <div className="card">
         <div className="card-body" style={{ paddingBottom: 0 }}>
-          <div className="filters-row">
-            <div className="filter-search">
-              <Search className="search-icon" size={16} />
-              <input
-                type="text" placeholder="Cari kode atau nama sub kegiatan..."
-                value={search} onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-            <select className="filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="Semua">Semua Status</option>
-              {statusList.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
+          <FilterSearchBar
+            searchTerm={search}
+            onSearchChange={setSearch}
+            filterValue={filterStatus}
+            onFilterChange={setFilterStatus}
+            filterOptions={statusList}
+            filterLabel="Semua Status"
+            bidangValue={filterBidang}
+            onBidangChange={setFilterBidang}
+            anggaranValue={filterAnggaran}
+            onAnggaranChange={setFilterAnggaran}
+            placeholder="Cari kode atau nama sub kegiatan..."
+          />
         </div>
 
         <div className="data-table-wrapper">
@@ -169,6 +217,7 @@ export default function SubKegiatan() {
                   <th>INDIKATOR</th>
                   <th>TARGET</th>
                   <th>ANGGARAN</th>
+                  <th>KETERCAPAIAN</th>
                   <th>STATUS</th>
                   <th>AKSI</th>
                 </tr>
@@ -178,6 +227,15 @@ export default function SubKegiatan() {
                   const parentKeg = kegiatan.find(
                     k => String(k.id) === String(item.kegiatanId) || String(k.raw?.id) === String(item.kegiatanId)
                   );
+
+                  const pct = (item.capaian !== undefined && item.capaian !== null && item.capaian !== '')
+                    ? Number(item.capaian)
+                    : (item.status === 'Tercapai' ? 100 : item.status === 'Belum Tercapai' ? 45 : 75);
+                  
+                  let barColor = '#4caf50';
+                  if (pct < 50) barColor = '#f44336';
+                  else if (pct < 75) barColor = '#ff9800';
+                  else if (pct < 90) barColor = '#2196f3';
 
                   return (
                     <tr key={item.id}>
@@ -194,6 +252,14 @@ export default function SubKegiatan() {
                       <td><div style={{ fontSize: '0.82rem' }}>{item.indikator || '-'}</div></td>
                       <td><div style={{ fontSize: '0.82rem', textAlign: 'center' }}>{item.target || '-'}</div></td>
                       <td>{formatAnggaranShort(item.anggaran)}</td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '100px' }}>
+                          <div style={{ flex: 1, height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(Math.max(pct, 0), 100)}%`, background: barColor, borderRadius: '4px' }} />
+                          </div>
+                          <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b', minWidth: '38px', textAlign: 'right' }}>{pct}%</span>
+                        </div>
+                      </td>
                       <td><StatusBadge status={item.status} /></td>
                       <td>
                         <div style={{ display: 'flex', gap: '6px' }}>
@@ -210,7 +276,7 @@ export default function SubKegiatan() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={9}>
+                    <td colSpan={10}>
                       <div className="empty-state">
                         <div className="icon">📂</div>
                         <h3>Tidak ada data</h3>
@@ -301,6 +367,11 @@ export default function SubKegiatan() {
             <label className="form-label">Anggaran (Rp)</label>
             <input className="form-input" type="number" value={form.anggaran}
               onChange={e => setForm({ ...form, anggaran: parseInt(e.target.value) || 0 })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Capaian / Ketercapaian (%)</label>
+            <input className="form-input" type="number" min="0" max="100" value={form.capaian || 0}
+              onChange={e => setForm({ ...form, capaian: parseInt(e.target.value) || 0 })} />
           </div>
         </div>
 

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
@@ -23,6 +24,7 @@ ChartJS.register(
 
 export default function Dashboard() {
   const { state } = useApp();
+  const navigate = useNavigate();
 
   const { programs, loading: loadingPrograms } = usePrograms();
   const { kegiatan, loading: loadingKegiatan } = useKegiatan();
@@ -54,9 +56,9 @@ export default function Dashboard() {
     const totalAnggaran = scopedPrograms.reduce((sum, p) => sum + (p.anggaranPagu || 0), 0);
     const totalRealisasi = scopedPrograms.reduce((sum, p) => sum + (p.anggaranRealisasi || 0), 0);
     const avgCapaian = scopedPrograms.length > 0
-      ? Math.round(scopedPrograms.reduce((sum, p) => sum + (p.capaian || 0), 0) / scopedPrograms.length)
+      ? Math.min(100, Math.round(scopedPrograms.reduce((sum, p) => sum + Math.min(p.capaian || 0, 100), 0) / scopedPrograms.length))
       : 0;
-    const realisasiPersen = totalAnggaran > 0 ? Math.round((totalRealisasi / totalAnggaran) * 100) : 0;
+    const realisasiPersen = totalAnggaran > 0 ? Math.min(100, Math.round((totalRealisasi / totalAnggaran) * 100)) : 0;
 
     return {
       totalProgram: scopedPrograms.length,
@@ -201,6 +203,7 @@ export default function Dashboard() {
               subtitle={`${stats.tercapai} program telah mencapai target`}
               badge={`${stats.tercapai} Tercapai`}
               badgeType="success"
+              to="/program"
             />
             <StatCard
               label="TOTAL KEGIATAN"
@@ -210,6 +213,7 @@ export default function Dashboard() {
               subtitle="Tersebar di seluruh bidang Dinkes"
               badge="Aktif"
               badgeType="info"
+              to="/kegiatan"
             />
             <StatCard
               label="TOTAL SUB KEGIATAN"
@@ -219,6 +223,7 @@ export default function Dashboard() {
               subtitle="Pelaksanaan di lapangan & puskesmas"
               badge="Terjadwal"
               badgeType="info"
+              to="/sub-kegiatan"
             />
             <StatCard
               label="JUMLAH BIDANG"
@@ -228,12 +233,13 @@ export default function Dashboard() {
               subtitle="Bidang & sekretariat Dinkes"
               badge="Garut"
               badgeType="info"
+              to="/perencanaan"
             />
           </div>
 
           {/* Secondary Kinerja & Anggaran Stat Grid */}
           <div className="grid-4" style={{ marginBottom: '24px' }}>
-            <div className="card">
+            <div className="card" onClick={() => navigate('/monitoring')} style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Monitoring">
               <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px' }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--green-light)', color: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <CheckCircle2 size={24} />
@@ -247,7 +253,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="card">
+            <div className="card" onClick={() => navigate('/program')} style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Program">
               <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px' }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--blue-light)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <TrendingUp size={24} />
@@ -261,7 +267,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="card">
+            <div className="card" onClick={() => navigate('/program')} style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Program">
               <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px' }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--purple-light)', color: 'var(--purple)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Wallet size={24} />
@@ -275,7 +281,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="card">
+            <div className="card" onClick={() => navigate('/evaluasi')} style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Evaluasi">
               <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px' }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--red-light)', color: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <XCircle size={24} />
