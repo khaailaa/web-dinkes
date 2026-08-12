@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import RoleQuickSwitcher from '../components/RoleQuickSwitcher';
-import { formatAnggaranShort, getBidangColor, chartData, bidangList, getProgressColor } from '../data/initialData';
+import { formatAnggaranShort, getBidangColor, chartData, bidangList, getProgressColor, normalizeBidangUtama } from '../data/initialData';
 import { usePrograms, useKegiatan, useSubKegiatan } from '../hooks/useSupabase';
 import {
   FolderKanban, CalendarCheck, ListChecks, FileText,
@@ -43,17 +43,17 @@ export default function Dashboard() {
   // Filtered data based on active scope
   const scopedPrograms = useMemo(() => {
     if (activeScopeBidang === 'Semua') return programs;
-    return programs.filter(p => !p.bidang || p.bidang === activeScopeBidang);
+    return programs.filter(p => !p.bidang || normalizeBidangUtama(p.bidang) === normalizeBidangUtama(activeScopeBidang));
   }, [programs, activeScopeBidang]);
 
   const scopedKegiatan = useMemo(() => {
     if (activeScopeBidang === 'Semua') return kegiatan;
-    return kegiatan.filter(k => !k.bidang || k.bidang === activeScopeBidang);
+    return kegiatan.filter(k => !k.bidang || normalizeBidangUtama(k.bidang) === normalizeBidangUtama(activeScopeBidang));
   }, [kegiatan, activeScopeBidang]);
 
   const scopedSubKegiatan = useMemo(() => {
     if (activeScopeBidang === 'Semua') return subKegiatan;
-    return subKegiatan.filter(sk => !sk.bidang || sk.bidang === activeScopeBidang);
+    return subKegiatan.filter(sk => !sk.bidang || normalizeBidangUtama(sk.bidang) === normalizeBidangUtama(activeScopeBidang));
   }, [subKegiatan, activeScopeBidang]);
 
   // Overall Statistics

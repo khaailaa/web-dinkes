@@ -4,7 +4,7 @@ import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import FilterSearchBar from '../components/FilterSearchBar';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import { formatAnggaranShort, statusList } from '../data/initialData';
+import { formatAnggaranShort, statusList, BIDANG_UTAMA_LIST } from '../data/initialData';
 import { usePrograms } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
 import { Plus, FolderKanban, CheckCircle2, Clock, XCircle, Trash2, Edit3, Loader2 } from 'lucide-react';
@@ -15,7 +15,7 @@ const emptyForm = {
   sasaran: '',
   indikator: '',
   target: '',
-  bidang: 'Kesmas',
+  bidang: 'Bidang Kesehatan Masyarakat (Kesmas)',
   capaian: 0,
   anggaranPagu: 0,
   status: 'Dalam Proses',
@@ -96,8 +96,11 @@ export default function Program() {
       setSaving(true);
       if (editItem) {
         await updateProgram(editItem.id, form);
+        dispatch({ type: 'UPDATE_PROGRAM', payload: { ...form, id: editItem.id } });
       } else {
-        await addProgram(form);
+        const added = await addProgram(form);
+        const newId = added?.[0]?.id || Date.now();
+        dispatch({ type: 'ADD_PROGRAM', payload: { ...form, id: newId } });
       }
       setShowModal(false);
       setForm(emptyForm);
@@ -290,13 +293,11 @@ export default function Program() {
               value={form.kode} onChange={e => setForm({ ...form, kode: e.target.value })} />
           </div>
           <div className="form-group">
-            <label className="form-label">Bidang</label>
+            <label className="form-label">Bidang Utama</label>
             <select className="form-select" value={form.bidang} onChange={e => setForm({ ...form, bidang: e.target.value })}>
-              <option value="Kesmas">Kesmas</option>
-              <option value="SDK">SDK</option>
-              <option value="Farmasi">Farmasi</option>
-              <option value="Yankes">Yankes</option>
-              <option value="P2P">P2P</option>
+              {BIDANG_UTAMA_LIST.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
             </select>
           </div>
         </div>

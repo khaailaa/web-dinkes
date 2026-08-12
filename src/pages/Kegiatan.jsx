@@ -4,7 +4,7 @@ import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import FilterSearchBar from '../components/FilterSearchBar';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import { formatAnggaranShort, statusList } from '../data/initialData';
+import { formatAnggaranShort, statusList, getSubBidangOptions, normalizeBidangUtama } from '../data/initialData';
 import { useKegiatan, usePrograms } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
 import { Plus, Search, ListChecks, CheckCircle2, Clock, XCircle, Trash2, Edit3, Loader2 } from 'lucide-react';
@@ -16,7 +16,7 @@ const emptyForm = {
   sasaran: '',
   indikator: '',
   target: '',
-  bidang: 'Kesmas',
+  bidang: '',
   lokasi: '',
   penanggungJawab: '',
   anggaran: 0,
@@ -80,20 +80,46 @@ export default function Kegiatan() {
     return result;
   }, [bidangFilteredData, search, filterStatus, filterAnggaran]);
 
+  const selectedProg = useMemo(() => {
+    return programs.find(p => String(p.id) === String(form.programId));
+  }, [programs, form.programId]);
+
+  const availableSubBidang = useMemo(() => {
+    const pBidang = selectedProg?.bidang || 'Bidang Kesehatan Masyarakat (Kesmas)';
+    return getSubBidangOptions(pBidang);
+  }, [selectedProg]);
+
+  const handleProgramChange = (progId) => {
+    const p = programs.find(item => String(item.id) === String(progId));
+    const subOpts = getSubBidangOptions(p?.bidang);
+    setForm(prev => ({
+      ...prev,
+      programId: progId,
+      bidang: subOpts[0] || '',
+    }));
+  };
+
   const openAdd = () => {
     setEditItem(null);
+    const firstProg = programs.length > 0 ? programs[0] : null;
+    const subOpts = getSubBidangOptions(firstProg?.bidang);
     setForm({
       ...emptyForm,
-      programId: programs.length > 0 ? programs[0].id : '',
+      programId: firstProg ? firstProg.id : '',
+      bidang: subOpts[0] || '',
     });
     setShowModal(true);
   };
 
   const openEdit = (item) => {
     setEditItem(item);
+    const pId = item.programId || (programs.length > 0 ? programs[0].id : '');
+    const p = programs.find(pr => String(pr.id) === String(pId));
+    const subOpts = getSubBidangOptions(p?.bidang);
     setForm({
       ...item,
-      programId: item.programId || (programs.length > 0 ? programs[0].id : ''),
+      programId: pId,
+      bidang: item.bidang && subOpts.includes(item.bidang) ? item.bidang : subOpts[0],
     });
     setShowModal(true);
   };
@@ -112,8 +138,11 @@ export default function Kegiatan() {
       setSaving(true);
       if (editItem) {
         await updateKegiatan(editItem.id, form);
+        dispatch({ type: 'UPDATE_KEGIATAN', payload: { ...form, id: editItem.id } });
       } else {
-        await addKegiatan(form);
+        const added = await addKegiatan(form);
+        const newId = added?.[0]?.id || Date.now();
+        dispatch({ type: 'ADD_KEGIATAN', payload: { ...form, id: newId } });
       }
       setShowModal(false);
       setForm(emptyForm);
@@ -314,12 +343,12 @@ export default function Kegiatan() {
           <select
             className="form-select"
             value={form.programId}
-            onChange={e => setForm({ ...form, programId: e.target.value })}
+            onChange={e => handleProgramChange(e.target.value)}
           >
             <option value="">-- Pilih Program --</option>
             {programs.map(p => (
               <option key={p.id} value={p.id}>
-                {p.kode ? `[${p.kode}] ` : ''}{p.nama}
+                {p.kode ? `[${p.kode}] ` : ''}{p.nama} ({p.bidang || 'Kesmas'})
               </option>
             ))}
           </select>
@@ -332,13 +361,13 @@ export default function Kegiatan() {
               value={form.kode} onChange={e => setForm({ ...form, kode: e.target.value })} />
           </div>
           <div className="form-group">
-            <label className="form-label">Bidang</label>
+            <label className="form-label">
+              Anak Bidang / Seksi <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>(Induk: {normalizeBidangUtama(selectedProg?.bidang)})</span>
+            </label>
             <select className="form-select" value={form.bidang} onChange={e => setForm({ ...form, bidang: e.target.value })}>
-              <option value="Kesmas">Kesmas</option>
-              <option value="SDK">SDK</option>
-              <option value="Farmasi">Farmasi</option>
-              <option value="Yankes">Yankes</option>
-              <option value="P2P">P2P</option>
+              {availableSubBidang.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
             </select>
           </div>
         </div>

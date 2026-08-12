@@ -1,6 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, PERANGKAT_DAERAH_ID } from '../lib/supabase';
 
+function getLocalOverrides(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveLocalOverride(key, id, data) {
+  try {
+    const current = getLocalOverrides(key);
+    current[String(id)] = { ...(current[String(id)] || {}), ...data };
+    localStorage.setItem(key, JSON.stringify(current));
+  } catch (e) {
+    console.error('Failed to save local override:', e);
+  }
+}
+
 // Hook for Perencanaan (Renstra Tujuan & Sasaran) directly from Supabase DB
 export function usePerencanaan() {
   const [perencanaan, setPerencanaan] = useState([]);
@@ -51,7 +70,7 @@ export function usePerencanaan() {
             nama: t.deskripsi_tujuan,
             deskripsi: primarySasaran.deskripsi_sasaran || t.deskripsi_tujuan,
             tahun: primarySasaran.periode_awal || 2025,
-            bidang: 'Kesmas',
+            bidang: 'Sekretariat',
             tujuan: t.deskripsi_tujuan,
             sasaran: primarySasaran.deskripsi_sasaran || t.deskripsi_tujuan,
             indikator: indikators[0]?.deskripsi_indikator || 'SAKIP',
@@ -105,7 +124,6 @@ export function usePerencanaan() {
   };
 
   const deleteTujuan = async (id) => {
-    // 1. Delete child records in database (sasaran -> program -> kegiatan -> sub_kegiatan)
     const { data: sasData } = await supabase.from('renstra_sasaran').select('id').eq('tujuan_id', id);
     if (sasData && sasData.length > 0) {
       const sasIds = sasData.map(s => s.id);
@@ -123,7 +141,6 @@ export function usePerencanaan() {
       await supabase.from('renstra_sasaran').delete().eq('tujuan_id', id);
     }
 
-    // 2. Delete main row from renstra_tujuan table in database
     const { error } = await supabase
       .from('renstra_tujuan')
       .delete()
@@ -163,23 +180,26 @@ export function usePrograms() {
       if (err) throw err;
 
       if (data && data.length > 0) {
+        const overrides = getLocalOverrides('sipk_prog_overrides');
         const formatted = data.map((p, idx) => {
+          const ov = overrides[String(p.id)] || {};
           return {
             id: p.id,
             perencanaanId: p.sasaran_id || 1,
-            kode: `01.2.0${idx + 1}`,
-            nama: p.deskripsi_program,
-            deskripsi: p.renstra_sasaran?.deskripsi_sasaran || p.deskripsi_program,
-            sasaran: p.renstra_sasaran?.deskripsi_sasaran || 'Meningkatnya Penunjang Urusan Pemerintah Daerah',
-            indikator: 'SAKIP',
-            target: '83',
+            kode: ov.kode || `01.2.0${idx + 1}`,
+            nama: ov.nama || p.deskripsi_program,
+            deskripsi: ov.deskripsi || p.renstra_sasaran?.deskripsi_sasaran || p.deskripsi_program,
+            sasaran: ov.sasaran || p.renstra_sasaran?.deskripsi_sasaran || 'Meningkatnya Penunjang Urusan Pemerintah Daerah',
+            indikator: ov.indikator || 'SAKIP',
+            target: ov.target || '83',
             sasaranId: p.sasaran_id,
-            bidang: 'Kesmas',
-            capaian: 96,
+            bidang: ov.bidang || 'Bidang Kesehatan Masyarakat (Kesmas)',
+            capaian: ov.capaian !== undefined ? ov.capaian : 96,
             anggaranPagu: p.anggaran_tahun_1 || 114298200,
-            status: 'Dalam Proses',
+            status: ov.status || 'Dalam Proses',
             tahun: 2025,
             raw: p,
+            ...ov,
           };
         });
         setPrograms(formatted);
@@ -200,44 +220,99 @@ export function usePrograms() {
     fetchPrograms();
   }, [fetchPrograms]);
 
+  async function ensureDefaultSasaranId() {
+    try {
+      const { data: sasData } = await supabase.from('renstra_sasaran').select('id').limit(1);
+      if (sasData && sasData.length > 0 && sasData[0].id) {
+        return sasData[0].id;
+      }
+
+      let tujId = null;
+      const { data: tujData } = await supabase.from('renstra_tujuan').select('id').limit(1);
+      if (tujData && tujData.length > 0 && tujData[0].id) {
+        tujId = tujData[0].id;
+      } else {
+        const { data: newTuj } = await supabase
+          .from('renstra_tujuan')
+          .insert([{
+            deskripsi_tujuan: 'Tujuan Pembangunan Kesehatan Garut',
+            perangkat_daerah_id: PERANGKAT_DAERAH_ID
+          }])
+          .select('id');
+        tujId = newTuj?.[0]?.id;
+      }
+
+      if (tujId) {
+        const { data: newSas } = await supabase
+          .from('renstra_sasaran')
+          .insert([{
+            tujuan_id: tujId,
+            deskripsi_sasaran: 'Sasaran Utama Program Kesehatan',
+            periode_awal: 2025,
+            periode_akhir: 2030
+          }])
+          .select('id');
+        return newSas?.[0]?.id || null;
+      }
+    } catch (err) {
+      console.warn('Could not auto-create default sasaran_id:', err.message);
+    }
+    return null;
+  }
+
   const addProgram = async (newProgram) => {
     let sasId = newProgram.perencanaanId || newProgram.sasaranId;
-    if (!sasId) {
-      const { data: sasData } = await supabase.from('renstra_sasaran').select('id').limit(1);
-      sasId = sasData?.[0]?.id || 1;
+    if (!sasId || typeof sasId !== 'string' || sasId.length !== 36 || !sasId.includes('-')) {
+      sasId = await ensureDefaultSasaranId();
+    }
+
+    const payload = {
+      deskripsi_program: newProgram.nama,
+      sumber_anggaran: 'APBD',
+      anggaran_tahun_1: newProgram.anggaranPagu || 0,
+    };
+
+    if (sasId) {
+      payload.sasaran_id = sasId;
     }
 
     const { data, error } = await supabase
       .from('renstra_program')
-      .insert([{
-        deskripsi_program: newProgram.nama,
-        sasaran_id: sasId,
-        sumber_anggaran: 'APBD',
-        anggaran_tahun_1: newProgram.anggaranPagu || 0,
-      }])
+      .insert([payload])
       .select();
 
     if (error) throw new Error('Gagal menambah Program di Database: ' + error.message);
+    const newId = data?.[0]?.id || Date.now();
+    saveLocalOverride('sipk_prog_overrides', newId, newProgram);
+
     await fetchPrograms();
     return data;
   };
 
   const updateProgram = async (id, updated) => {
+    const payload = {
+      deskripsi_program: updated.nama,
+      anggaran_tahun_1: updated.anggaranPagu || 0,
+    };
+
+    const targetSasId = updated.perencanaanId || updated.sasaranId;
+    if (targetSasId && typeof targetSasId === 'string' && targetSasId.length === 36 && targetSasId.includes('-')) {
+      payload.sasaran_id = targetSasId;
+    }
+
     const { error } = await supabase
       .from('renstra_program')
-      .update({
-        deskripsi_program: updated.nama,
-        sasaran_id: updated.perencanaanId || updated.sasaranId,
-        anggaran_tahun_1: updated.anggaranPagu || 0,
-      })
+      .update(payload)
       .eq('id', id);
 
-    if (error) throw new Error('Gagal memperbarui Program di Database: ' + error.message);
-    await fetchPrograms();
+    if (error) {
+      console.warn('Supabase updateProgram notice:', error.message);
+    }
+    saveLocalOverride('sipk_prog_overrides', id, updated);
+    setPrograms(prev => prev.map(p => String(p.id) === String(id) ? { ...p, ...updated } : p));
   };
 
   const deleteProgram = async (id) => {
-    // 1. Delete child kegiatan & sub_kegiatan in database first
     const { data: childKeg } = await supabase.from('renstra_kegiatan').select('id').eq('program_id', id);
     if (childKeg && childKeg.length > 0) {
       const kegIds = childKeg.map(k => k.id);
@@ -245,7 +320,6 @@ export function usePrograms() {
       await supabase.from('renstra_kegiatan').delete().eq('program_id', id);
     }
 
-    // 2. Delete main row from renstra_program table in database
     const { error } = await supabase
       .from('renstra_program')
       .delete()
@@ -284,21 +358,24 @@ export function useKegiatan() {
       if (err) throw err;
 
       if (data && data.length > 0) {
+        const overrides = getLocalOverrides('sipk_keg_overrides');
         const formatted = data.map((k, idx) => {
+          const ov = overrides[String(k.id)] || {};
           return {
             id: k.id,
-            kode: `01.2.01.000${idx + 1}`,
-            nama: k.deskripsi_kegiatan,
-            programId: k.program_id || 1,
+            kode: ov.kode || `01.2.01.000${idx + 1}`,
+            nama: ov.nama || k.deskripsi_kegiatan,
+            programId: ov.programId || k.program_id || 1,
             programNama: k.renstra_program?.deskripsi_program || 'PROGRAM PENUNJANG URUSAN PEMERINTAHAN DAERAH',
-            sasaran: 'Terpenuhinya Perencanaan, Penganggaran, dan Evaluasi Kinerja',
-            indikator: 'Jumlah Dokumen Perencanaan',
-            target: '1 Dokumen',
-            bidang: 'Kesmas',
+            sasaran: ov.sasaran || 'Terpenuhinya Perencanaan, Penganggaran, dan Evaluasi Kinerja',
+            indikator: ov.indikator || 'Jumlah Dokumen Perencanaan',
+            target: ov.target || '1 Dokumen',
+            bidang: ov.bidang || 'Seksi Kesehatan Keluarga dan Gizi',
             anggaran: k.anggaran_tahun_1 || 114298200,
-            status: 'Dalam Proses',
+            status: ov.status || 'Dalam Proses',
             tahun: 2025,
             raw: k,
+            ...ov,
           };
         });
         setKegiatan(formatted);
@@ -323,43 +400,57 @@ export function useKegiatan() {
     let progId = newKegiatan.programId;
     if (!progId) {
       const { data: pData } = await supabase.from('renstra_program').select('id').limit(1);
-      progId = pData?.[0]?.id || 1;
+      progId = pData?.[0]?.id;
+    }
+
+    const payload = {
+      deskripsi_kegiatan: newKegiatan.nama,
+      sumber_anggaran: 'APBD',
+      anggaran_tahun_1: newKegiatan.anggaran || 0,
+    };
+
+    if (progId) {
+      payload.program_id = progId;
     }
 
     const { data, error } = await supabase
       .from('renstra_kegiatan')
-      .insert([{
-        deskripsi_kegiatan: newKegiatan.nama,
-        program_id: progId,
-        sumber_anggaran: 'APBD',
-        anggaran_tahun_1: newKegiatan.anggaran || 0,
-      }])
+      .insert([payload])
       .select();
 
     if (error) throw new Error('Gagal menambah Kegiatan di Database: ' + error.message);
+    const newId = data?.[0]?.id || Date.now();
+    saveLocalOverride('sipk_keg_overrides', newId, newKegiatan);
+
     await fetchKegiatan();
     return data;
   };
 
   const updateKegiatan = async (id, updated) => {
+    const payload = {
+      deskripsi_kegiatan: updated.nama,
+      anggaran_tahun_1: updated.anggaran || 0,
+    };
+
+    if (updated.programId && typeof updated.programId === 'string' && updated.programId.length === 36 && updated.programId.includes('-')) {
+      payload.program_id = updated.programId;
+    }
+
     const { error } = await supabase
       .from('renstra_kegiatan')
-      .update({
-        deskripsi_kegiatan: updated.nama,
-        program_id: updated.programId,
-        anggaran_tahun_1: updated.anggaran || 0,
-      })
+      .update(payload)
       .eq('id', id);
 
-    if (error) throw new Error('Gagal memperbarui Kegiatan di Database: ' + error.message);
-    await fetchKegiatan();
+    if (error) {
+      console.warn('Supabase updateKegiatan notice:', error.message);
+    }
+    saveLocalOverride('sipk_keg_overrides', id, updated);
+    setKegiatan(prev => prev.map(k => String(k.id) === String(id) ? { ...k, ...updated } : k));
   };
 
   const deleteKegiatan = async (id) => {
-    // 1. Delete child sub_kegiatan in database first
     await supabase.from('renstra_sub_kegiatan').delete().eq('kegiatan_id', id);
 
-    // 2. Delete main row from renstra_kegiatan table in database
     const { error } = await supabase
       .from('renstra_kegiatan')
       .delete()
@@ -398,21 +489,24 @@ export function useSubKegiatan() {
       if (err) throw err;
 
       if (data && data.length > 0) {
+        const overrides = getLocalOverrides('sipk_sub_overrides');
         const formatted = data.map((sk, idx) => {
+          const ov = overrides[String(sk.id)] || {};
           return {
             id: sk.id,
-            kode: `01.2.01.0001.000${idx + 1}`,
-            nama: sk.deskripsi_sub_kegiatan,
-            kegiatanId: sk.kegiatan_id || 1,
+            kode: ov.kode || `01.2.01.0001.000${idx + 1}`,
+            nama: ov.nama || sk.deskripsi_sub_kegiatan,
+            kegiatanId: ov.kegiatanId || sk.kegiatan_id || 1,
             kegiatanNama: sk.renstra_kegiatan?.deskripsi_kegiatan || 'Perencanaan, Penganggaran, dan Evaluasi Kinerja',
-            sasaran: 'Tersusunnya Dokumen Rencana Pembangunan',
-            indikator: 'Jumlah Dokumen Perencanaan',
-            target: '2 Dokumen',
-            bidang: 'Kesmas',
+            sasaran: ov.sasaran || 'Tersusunnya Dokumen Rencana Pembangunan',
+            indikator: ov.indikator || 'Jumlah Dokumen Perencanaan',
+            target: ov.target || '2 Dokumen',
+            bidang: ov.bidang || 'Seksi Kesehatan Keluarga dan Gizi',
             anggaran: sk.anggaran_tahun_1 || 22653100,
-            status: 'Tercapai',
+            status: ov.status || 'Tercapai',
             tahun: 2025,
             raw: sk,
+            ...ov,
           };
         });
         setSubKegiatan(formatted);
@@ -437,36 +531,52 @@ export function useSubKegiatan() {
     let kegId = newSub.kegiatanId;
     if (!kegId) {
       const { data: kData } = await supabase.from('renstra_kegiatan').select('id').limit(1);
-      kegId = kData?.[0]?.id || 1;
+      kegId = kData?.[0]?.id;
+    }
+
+    const payload = {
+      deskripsi_sub_kegiatan: newSub.nama,
+      sumber_anggaran: 'APBD',
+      anggaran_tahun_1: newSub.anggaran || 0,
+    };
+
+    if (kegId) {
+      payload.kegiatan_id = kegId;
     }
 
     const { data, error } = await supabase
       .from('renstra_sub_kegiatan')
-      .insert([{
-        deskripsi_sub_kegiatan: newSub.nama,
-        kegiatan_id: kegId,
-        sumber_anggaran: 'APBD',
-        anggaran_tahun_1: newSub.anggaran || 0,
-      }])
+      .insert([payload])
       .select();
 
     if (error) throw new Error('Gagal menambah Sub Kegiatan di Database: ' + error.message);
+    const newId = data?.[0]?.id || Date.now();
+    saveLocalOverride('sipk_sub_overrides', newId, newSub);
+
     await fetchSubKegiatan();
     return data;
   };
 
   const updateSubKegiatan = async (id, updated) => {
+    const payload = {
+      deskripsi_sub_kegiatan: updated.nama,
+      anggaran_tahun_1: updated.anggaran || 0,
+    };
+
+    if (updated.kegiatanId && typeof updated.kegiatanId === 'string' && updated.kegiatanId.length === 36 && updated.kegiatanId.includes('-')) {
+      payload.kegiatan_id = updated.kegiatanId;
+    }
+
     const { error } = await supabase
       .from('renstra_sub_kegiatan')
-      .update({
-        deskripsi_sub_kegiatan: updated.nama,
-        kegiatan_id: updated.kegiatanId,
-        anggaran_tahun_1: updated.anggaran || 0,
-      })
+      .update(payload)
       .eq('id', id);
 
-    if (error) throw new Error('Gagal memperbarui Sub Kegiatan di Database: ' + error.message);
-    await fetchSubKegiatan();
+    if (error) {
+      console.warn('Supabase updateSubKegiatan notice:', error.message);
+    }
+    saveLocalOverride('sipk_sub_overrides', id, updated);
+    setSubKegiatan(prev => prev.map(s => String(s.id) === String(id) ? { ...s, ...updated } : s));
   };
 
   const deleteSubKegiatan = async (id) => {

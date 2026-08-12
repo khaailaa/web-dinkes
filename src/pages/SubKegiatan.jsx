@@ -4,8 +4,8 @@ import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import FilterSearchBar from '../components/FilterSearchBar';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import { formatAnggaranShort, statusList } from '../data/initialData';
-import { useSubKegiatan, useKegiatan } from '../hooks/useSupabase';
+import { formatAnggaranShort, statusList, getSubBidangOptions, normalizeBidangUtama } from '../data/initialData';
+import { useSubKegiatan, useKegiatan, usePrograms } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
 import { Plus, Search, Layers, CheckCircle2, Clock, XCircle, Trash2, Edit3, Loader2 } from 'lucide-react';
 
@@ -16,7 +16,7 @@ const emptyForm = {
   sasaran: '',
   indikator: '',
   target: '',
-  bidang: 'Kesmas',
+  bidang: '',
   penanggungJawab: '',
   anggaran: 0,
   realisasi: 0,
@@ -28,6 +28,7 @@ const emptyForm = {
 export default function SubKegiatan() {
   const { subKegiatan, loading, addSubKegiatan, updateSubKegiatan, deleteSubKegiatan } = useSubKegiatan();
   const { kegiatan } = useKegiatan();
+  const { programs } = usePrograms();
   const { state, dispatch } = useApp();
   const currentUser = state.currentUser;
   const userBidang = currentUser?.bidang;
@@ -79,20 +80,56 @@ export default function SubKegiatan() {
     return result;
   }, [bidangFilteredData, search, filterStatus, filterAnggaran]);
 
+  const selectedKeg = useMemo(() => {
+    return kegiatan.find(k => String(k.id) === String(form.kegiatanId));
+  }, [kegiatan, form.kegiatanId]);
+
+  const parentProg = useMemo(() => {
+    return programs.find(p => String(p.id) === String(selectedKeg?.programId));
+  }, [programs, selectedKeg]);
+
+  const parentBidangUtama = useMemo(() => {
+    return parentProg?.bidang || selectedKeg?.bidang || 'Bidang Kesehatan Masyarakat (Kesmas)';
+  }, [parentProg, selectedKeg]);
+
+  const availableSubBidang = useMemo(() => {
+    return getSubBidangOptions(parentBidangUtama);
+  }, [parentBidangUtama]);
+
+  const handleKegiatanChange = (kegId) => {
+    const kegItem = kegiatan.find(k => String(k.id) === String(kegId));
+    const progItem = programs.find(p => String(p.id) === String(kegItem?.programId));
+    const subOpts = getSubBidangOptions(progItem?.bidang || kegItem?.bidang);
+    setForm(prev => ({
+      ...prev,
+      kegiatanId: kegId,
+      bidang: subOpts[0] || '',
+    }));
+  };
+
   const openAdd = () => {
     setEditItem(null);
+    const firstKeg = kegiatan.length > 0 ? kegiatan[0] : null;
+    const progItem = programs.find(p => String(p.id) === String(firstKeg?.programId));
+    const subOpts = getSubBidangOptions(progItem?.bidang || firstKeg?.bidang);
     setForm({
       ...emptyForm,
-      kegiatanId: kegiatan.length > 0 ? kegiatan[0].id : '',
+      kegiatanId: firstKeg ? firstKeg.id : '',
+      bidang: subOpts[0] || '',
     });
     setShowModal(true);
   };
 
   const openEdit = (item) => {
     setEditItem(item);
+    const kId = item.kegiatanId || (kegiatan.length > 0 ? kegiatan[0].id : '');
+    const kegItem = kegiatan.find(k => String(k.id) === String(kId));
+    const progItem = programs.find(p => String(p.id) === String(kegItem?.programId));
+    const subOpts = getSubBidangOptions(progItem?.bidang || kegItem?.bidang);
     setForm({
       ...item,
-      kegiatanId: item.kegiatanId || (kegiatan.length > 0 ? kegiatan[0].id : ''),
+      kegiatanId: kId,
+      bidang: item.bidang && subOpts.includes(item.bidang) ? item.bidang : subOpts[0],
     });
     setShowModal(true);
   };
@@ -111,8 +148,11 @@ export default function SubKegiatan() {
       setSaving(true);
       if (editItem) {
         await updateSubKegiatan(editItem.id, form);
+        dispatch({ type: 'UPDATE_SUB_KEGIATAN', payload: { ...form, id: editItem.id } });
       } else {
-        await addSubKegiatan(form);
+        const added = await addSubKegiatan(form);
+        const newId = added?.[0]?.id || Date.now();
+        dispatch({ type: 'ADD_SUB_KEGIATAN', payload: { ...form, id: newId } });
       }
       setShowModal(false);
       setForm(emptyForm);
@@ -313,7 +353,7 @@ export default function SubKegiatan() {
           <select
             className="form-select"
             value={form.kegiatanId}
-            onChange={e => setForm({ ...form, kegiatanId: e.target.value })}
+            onChange={e => handleKegiatanChange(e.target.value)}
           >
             <option value="">-- Pilih Kegiatan --</option>
             {kegiatan.map(k => (
@@ -331,13 +371,13 @@ export default function SubKegiatan() {
               value={form.kode} onChange={e => setForm({ ...form, kode: e.target.value })} />
           </div>
           <div className="form-group">
-            <label className="form-label">Bidang</label>
+            <label className="form-label">
+              Anak Bidang / Seksi <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>(Induk: {normalizeBidangUtama(parentBidangUtama)})</span>
+            </label>
             <select className="form-select" value={form.bidang} onChange={e => setForm({ ...form, bidang: e.target.value })}>
-              <option value="Kesmas">Kesmas</option>
-              <option value="SDK">SDK</option>
-              <option value="Farmasi">Farmasi</option>
-              <option value="Yankes">Yankes</option>
-              <option value="P2P">P2P</option>
+              {availableSubBidang.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
             </select>
           </div>
         </div>

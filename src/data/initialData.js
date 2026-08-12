@@ -2,15 +2,66 @@
 // SIPK Garut - Initial Data
 // ===========================
 
-export const bidangList = ['Kesmas', 'P2P', 'Yankes', 'SDK', 'Farmasi', 'Gizi'];
+export const BIDANG_UTAMA_LIST = [
+  'Sekretariat',
+  'Bidang Kesehatan Masyarakat (Kesmas)',
+  'Bidang Pencegahan dan Pengendalian Penyakit (P2P)',
+  'Bidang Pelayanan Kesehatan (Yankes)',
+  'Bidang Sumber Daya Kesehatan (SDK)',
+];
+
+export const bidangList = BIDANG_UTAMA_LIST;
+
+export const SUB_BIDANG_MAP = {
+  'Sekretariat': [
+    'Umum dan Kepegawaian',
+    'Subbagian Keuangan dan Barang Milik Daerah',
+    'Subbagian Program / Perencanaan dan Evaluasi',
+  ],
+  'Bidang Kesehatan Masyarakat (Kesmas)': [
+    'Seksi Kesehatan Keluarga dan Gizi',
+    'Seksi Promosi dan Pemberdayaan Masyarakat',
+    'Seksi Kesehatan Lingkungan, Kerja, dan Olahraga',
+  ],
+  'Bidang Pencegahan dan Pengendalian Penyakit (P2P)': [
+    'Seksi Surveilans dan Imunisasi',
+    'Seksi Pencegahan dan Pengendalian Penyakit Menular (P2M)',
+    'Seksi Pencegahan dan Pengendalian Penyakit Tidak Menular (PPTM) dan Kesehatan Jiwa',
+  ],
+  'Bidang Pelayanan Kesehatan (Yankes)': [
+    'Seksi Pelayanan Kesehatan Primer',
+    'Seksi Pelayanan Kesehatan Rujukan',
+    'Seksi Pelayanan Kesehatan Tradisional',
+  ],
+  'Bidang Sumber Daya Kesehatan (SDK)': [
+    'Seksi Kefarmasian',
+    'Seksi Alat Kesehatan dan Perbekalan Kesehatan Rumah Tangga (PKRT)',
+    'Seksi Sumber Daya Manusia Kesehatan (SDMK)',
+  ],
+};
+
+export function normalizeBidangUtama(b) {
+  if (!b) return 'Bidang Kesehatan Masyarakat (Kesmas)';
+  const str = String(b).toLowerCase();
+  if (str.includes('sekretariat')) return 'Sekretariat';
+  if (str.includes('kesmas') || str.includes('masyarakat')) return 'Bidang Kesehatan Masyarakat (Kesmas)';
+  if (str.includes('p2p') || str.includes('pencegahan')) return 'Bidang Pencegahan dan Pengendalian Penyakit (P2P)';
+  if (str.includes('yankes') || str.includes('pelayanan')) return 'Bidang Pelayanan Kesehatan (Yankes)';
+  if (str.includes('sdk') || str.includes('sumber daya')) return 'Bidang Sumber Daya Kesehatan (SDK)';
+  return 'Bidang Kesehatan Masyarakat (Kesmas)';
+}
+
+export function getSubBidangOptions(bidangUtama) {
+  const normalized = normalizeBidangUtama(bidangUtama);
+  return SUB_BIDANG_MAP[normalized] || SUB_BIDANG_MAP['Bidang Kesehatan Masyarakat (Kesmas)'];
+}
 
 export const bidangCodeMap = {
-  'Kesmas': 'KM',
-  'P2P': 'P2P',
-  'Yankes': 'YK',
-  'SDK': 'SDK',
-  'Farmasi': 'FM',
-  'Gizi': 'GZ',
+  'Sekretariat': 'SEK',
+  'Bidang Kesehatan Masyarakat (Kesmas)': 'KM',
+  'Bidang Pencegahan dan Pengendalian Penyakit (P2P)': 'P2P',
+  'Bidang Pelayanan Kesehatan (Yankes)': 'YK',
+  'Bidang Sumber Daya Kesehatan (SDK)': 'SDK',
 };
 
 export const statusList = ['Tercapai', 'Dalam Proses', 'Belum Tercapai'];
