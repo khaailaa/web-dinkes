@@ -6,10 +6,12 @@ import StatusBadge from '../components/StatusBadge';
 import RoleQuickSwitcher from '../components/RoleQuickSwitcher';
 import { formatAnggaranShort, getBidangColor, chartData, bidangList, getProgressColor, normalizeBidangUtama, isItemInUserBidang } from '../data/initialData';
 import { usePrograms, useKegiatan, useSubKegiatan } from '../hooks/useSupabase';
+import Modal from '../components/Modal';
 import {
   FolderKanban, CalendarCheck, ListChecks, FileText,
-  CheckCircle2, XCircle, TrendingUp, Wallet, Download, Loader2
+  CheckCircle2, XCircle, TrendingUp, Wallet, Download, Loader2, Edit3
 } from 'lucide-react';
+
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, PointElement,
@@ -36,6 +38,7 @@ export default function Dashboard() {
   const userBidang = currentUser?.bidang;
 
   const [selectedBidang, setSelectedBidang] = useState('Semua');
+  const [detailItem, setDetailItem] = useState(null);
 
   const userBidangScope = currentUser?.canViewAllBidang ? null : userBidang;
   const activeScopeBidang = userBidangScope && userBidangScope !== 'Semua' ? userBidangScope : selectedBidang;
@@ -498,14 +501,19 @@ export default function Dashboard() {
                 <div>
                   <h3>🏆 Top 5 Program Terbaik</h3>
                   <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                    Program dengan tingkat capaian fisik tertinggi
+                    Program dengan tingkat capaian fisik tertinggi (Klik untuk detail)
                   </p>
                 </div>
               </div>
               <div className="card-body">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   {sortedTopPrograms.map((p, idx) => (
-                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div
+                      key={p.id}
+                      onClick={() => setDetailItem(p)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '6px 8px', borderRadius: '6px', transition: 'background 0.15s ease' }}
+                      className="hover-row"
+                    >
                       <div style={{
                         width: '24px', height: '24px', borderRadius: '50%', background: '#0f2744', color: 'white',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0
@@ -513,7 +521,7 @@ export default function Dashboard() {
                         {idx + 1}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#2563eb' }}>
                           {p.nama}
                         </div>
                         <div className="progress-bar" style={{ marginTop: '4px' }}>
@@ -536,14 +544,19 @@ export default function Dashboard() {
                 <div>
                   <h3>⚠ 5 Program Perlu Perhatian</h3>
                   <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                    Program dengan tingkat capaian fisik di bawah target
+                    Program dengan tingkat capaian fisik di bawah target (Klik untuk detail)
                   </p>
                 </div>
               </div>
               <div className="card-body">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   {sortedAttentionPrograms.map((p, idx) => (
-                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div
+                      key={p.id}
+                      onClick={() => setDetailItem(p)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '6px 8px', borderRadius: '6px', transition: 'background 0.15s ease' }}
+                      className="hover-row"
+                    >
                       <div style={{
                         width: '24px', height: '24px', borderRadius: '50%',
                         background: (p.capaian || 0) < 80 ? 'var(--orange)' : '#00a86b', color: 'white',
@@ -552,7 +565,7 @@ export default function Dashboard() {
                         {idx + 1}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#2563eb' }}>
                           {p.nama}
                         </div>
                         <div className="progress-bar" style={{ marginTop: '4px' }}>
@@ -574,7 +587,7 @@ export default function Dashboard() {
           {/* Program Table Preview */}
           <div className="card">
             <div className="card-header">
-              <h3>Daftar Program Supabase Terbaru</h3>
+              <h3>Daftar Program Terbaru</h3>
               <button className="btn btn-sm btn-outline" onClick={() => navigate('/program')}>
                 Lihat Semua Program ({scopedPrograms.length})
               </button>
@@ -592,15 +605,15 @@ export default function Dashboard() {
                   </thead>
                   <tbody>
                     {scopedPrograms.slice(0, 5).map(p => (
-                      <tr key={p.id}>
-                        <td>
-                          <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{p.nama}</div>
+                      <tr key={p.id} style={{ cursor: 'pointer' }}>
+                        <td onClick={() => setDetailItem(p)}>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#2563eb' }}>{p.nama}</div>
                         </td>
-                        <td><span className={`badge-bidang badge-${getBidangColor(p.bidang)}`}>{p.bidang}</span></td>
-                        <td>
+                        <td onClick={() => setDetailItem(p)}><span className={`badge-bidang badge-${getBidangColor(p.bidang)}`}>{p.bidang}</span></td>
+                        <td onClick={() => setDetailItem(p)}>
                           <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{Math.min(p.capaian || 0, 100)}%</span>
                         </td>
-                        <td><StatusBadge status={p.status} /></td>
+                        <td onClick={() => setDetailItem(p)}><StatusBadge status={p.status} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -609,6 +622,72 @@ export default function Dashboard() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Detail Modal for Dashboard */}
+      {detailItem && (
+        <Modal
+          isOpen={!!detailItem}
+          size="lg"
+          title={`Detail Program: [${detailItem.kode || '-'}] ${detailItem.nama}`}
+          onClose={() => setDetailItem(null)}
+        >
+          <div style={{ padding: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <span className="code-badge" style={{ fontSize: '0.9rem', padding: '6px 12px' }}>{detailItem.kode || '01.2.01'}</span>
+                <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f2744', marginTop: '8px', marginBottom: '4px' }}>{detailItem.nama}</h2>
+                <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Hirarki: <strong>Program Utama (Top Level)</strong></div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <StatusBadge status={detailItem.status || 'Dalam Proses'} />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Bidang Utama</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e293b', marginTop: '4px' }}>{detailItem.bidang || 'Sekretariat'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Anggaran Pagu (Rp)</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#2563eb', marginTop: '4px' }}>
+                  Rp {(detailItem.anggaranPagu || detailItem.anggaran || 0).toLocaleString('id-ID')}
+                </div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Ketercapaian Kinerja</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#16a34a', marginTop: '4px' }}>
+                  {detailItem.capaian !== undefined ? detailItem.capaian : 96}%
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: '#f1f5f9', padding: '16px', borderRadius: '10px', marginBottom: '20px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <strong style={{ fontSize: '0.82rem', color: '#475569', display: 'block', marginBottom: '2px' }}>SASARAN PROGRAM:</strong>
+                <span style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: 500 }}>{detailItem.sasaran || detailItem.deskripsi || '-'}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <strong style={{ fontSize: '0.82rem', color: '#475569', display: 'block', marginBottom: '2px' }}>INDIKATOR PROGRAM:</strong>
+                  <span style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: 500 }}>{detailItem.indikator || 'SAKIP'}</span>
+                </div>
+                <div>
+                  <strong style={{ fontSize: '0.82rem', color: '#475569', display: 'block', marginBottom: '2px' }}>TARGET PROGRAM:</strong>
+                  <span style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: 500 }}>{detailItem.target || '-'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button className="btn btn-outline" onClick={() => setDetailItem(null)}>Tutup</button>
+              <button className="btn btn-primary" onClick={() => { setDetailItem(null); navigate('/program'); }}>
+                <Edit3 size={15} style={{ marginRight: '6px' }} /> Ke Halaman Program
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

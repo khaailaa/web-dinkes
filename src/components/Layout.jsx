@@ -314,11 +314,6 @@ export default function Layout({ children }) {
           )}
         </main>
       </div>
-
-      {/* Help FAB */}
-      <button className="fab-help" title="Bantuan Akses Role" onClick={() => alert(`Pengguna Saat Ini: ${currentUser.nama}\nRole: ${currentUser.role}\nAkses Bidang: ${currentUser.bidang}\n\nUntuk mengganti akun, silakan klik menu Profil -> Keluar.`)}>
-        <HelpCircle size={22} />
-      </button>
     </div>
   );
 }
