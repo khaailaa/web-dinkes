@@ -1,51 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, PERANGKAT_DAERAH_ID } from '../lib/supabase';
-import {
-  initialPerencanaan,
-  initialPrograms,
-  initialKegiatan,
-  initialSubKegiatan,
-} from '../data/initialData';
 
-const DELETED_STORAGE_KEY = 'sipk_garut_deleted_items';
-
-function getDeletedIds(type) {
-  try {
-    const raw = localStorage.getItem(DELETED_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed[type] || [];
-    }
-  } catch (e) {
-    console.error('Failed to parse deleted items from localStorage:', e);
-  }
-  return [];
-}
-
-function saveDeletedId(type, id) {
-  try {
-    const raw = localStorage.getItem(DELETED_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    const existing = parsed[type] || [];
-    const idStr = String(id);
-    if (!existing.includes(idStr)) {
-      parsed[type] = [...existing, idStr];
-      localStorage.setItem(DELETED_STORAGE_KEY, JSON.stringify(parsed));
-    }
-  } catch (e) {
-    console.error('Failed to save deleted item to localStorage:', e);
-  }
-}
-
-// Hook for Perencanaan (Renstra Tujuan & Sasaran)
+// Hook for Perencanaan (Renstra Tujuan & Sasaran) directly from Supabase DB
 export function usePerencanaan() {
   const [perencanaan, setPerencanaan] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchPerencanaan = useCallback(async () => {
-    const deletedIds = getDeletedIds('perencanaan');
     try {
+      setLoading(true);
       const { data: tujuanData, error: tujuanErr } = await supabase
         .from('renstra_tujuan')
         .select(`
@@ -98,13 +62,14 @@ export function usePerencanaan() {
             raw: t,
           };
         });
-        setPerencanaan(formatted.filter(p => !deletedIds.includes(String(p.id))));
+        setPerencanaan(formatted);
       } else {
-        setPerencanaan(initialPerencanaan.filter(p => !deletedIds.includes(String(p.id))));
+        setPerencanaan([]);
       }
+      setError(null);
     } catch (err) {
-      console.warn('Falling back to initialPerencanaan:', err.message);
-      setPerencanaan(initialPerencanaan.filter(p => !deletedIds.includes(String(p.id))));
+      console.error('Error fetching renstra_tujuan from Supabase DB:', err.message);
+      setPerencanaan([]);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -116,86 +81,70 @@ export function usePerencanaan() {
   }, [fetchPerencanaan]);
 
   const addTujuan = async (newTujuan) => {
-    try {
-      const { data, error } = await supabase
-        .from('renstra_tujuan')
-        .insert([{
-          deskripsi_tujuan: newTujuan.nama,
-          perangkat_daerah_id: PERANGKAT_DAERAH_ID
-        }])
-        .select();
+    const { data, error } = await supabase
+      .from('renstra_tujuan')
+      .insert([{
+        deskripsi_tujuan: newTujuan.nama,
+        perangkat_daerah_id: PERANGKAT_DAERAH_ID
+      }])
+      .select();
 
-      if (error) throw error;
-      await fetchPerencanaan();
-      return data;
-    } catch {
-      console.warn('Adding to local state fallback');
-      const item = { ...newTujuan, id: Date.now() };
-      setPerencanaan(prev => [...prev, item]);
-      return [item];
-    }
+    if (error) throw new Error('Gagal menambah Perencanaan di Database: ' + error.message);
+    await fetchPerencanaan();
+    return data;
   };
 
   const updateTujuan = async (id, updated) => {
-    try {
-      const { error } = await supabase
-        .from('renstra_tujuan')
-        .update({ deskripsi_tujuan: updated.nama })
-        .eq('id', id);
+    const { error } = await supabase
+      .from('renstra_tujuan')
+      .update({ deskripsi_tujuan: updated.nama })
+      .eq('id', id);
 
-      if (error) throw error;
-      await fetchPerencanaan();
-    } catch {
-      setPerencanaan(prev => prev.map(p => String(p.id) === String(id) ? { ...p, ...updated } : p));
-    }
+    if (error) throw new Error('Gagal memperbarui Perencanaan di Database: ' + error.message);
+    await fetchPerencanaan();
   };
 
   const deleteTujuan = async (id) => {
-    try {
-      // Cascade delete child records in Supabase (sasaran -> program -> kegiatan -> sub_kegiatan)
-      const { data: sasData } = await supabase.from('renstra_sasaran').select('id').eq('tujuan_id', id);
-      if (sasData && sasData.length > 0) {
-        const sasIds = sasData.map(s => s.id);
-        const { data: prgData } = await supabase.from('renstra_program').select('id').in('sasaran_id', sasIds);
-        if (prgData && prgData.length > 0) {
-          const prgIds = prgData.map(p => p.id);
-          const { data: kegData } = await supabase.from('renstra_kegiatan').select('id').in('program_id', prgIds);
-          if (kegData && kegData.length > 0) {
-            const kegIds = kegData.map(k => k.id);
-            await supabase.from('renstra_sub_kegiatan').delete().in('kegiatan_id', kegIds);
-          }
-          await supabase.from('renstra_kegiatan').delete().in('program_id', prgIds);
-          await supabase.from('renstra_program').delete().in('sasaran_id', sasIds);
+    // 1. Delete child records in database (sasaran -> program -> kegiatan -> sub_kegiatan)
+    const { data: sasData } = await supabase.from('renstra_sasaran').select('id').eq('tujuan_id', id);
+    if (sasData && sasData.length > 0) {
+      const sasIds = sasData.map(s => s.id);
+      const { data: prgData } = await supabase.from('renstra_program').select('id').in('sasaran_id', sasIds);
+      if (prgData && prgData.length > 0) {
+        const prgIds = prgData.map(p => p.id);
+        const { data: kegData } = await supabase.from('renstra_kegiatan').select('id').in('program_id', prgIds);
+        if (kegData && kegData.length > 0) {
+          const kegIds = kegData.map(k => k.id);
+          await supabase.from('renstra_sub_kegiatan').delete().in('kegiatan_id', kegIds);
         }
-        await supabase.from('renstra_sasaran').delete().eq('tujuan_id', id);
+        await supabase.from('renstra_kegiatan').delete().in('program_id', prgIds);
+        await supabase.from('renstra_program').delete().in('sasaran_id', sasIds);
       }
-
-      const { error } = await supabase
-        .from('renstra_tujuan')
-        .delete()
-        .eq('id', id);
-
-      if (error) console.error('Supabase delete error for tujuan:', error);
-    } catch (err) {
-      console.error('Exception deleting tujuan:', err);
-    } finally {
-      saveDeletedId('perencanaan', id);
-      setPerencanaan(prev => prev.filter(p => String(p.id) !== String(id)));
+      await supabase.from('renstra_sasaran').delete().eq('tujuan_id', id);
     }
+
+    // 2. Delete main row from renstra_tujuan table in database
+    const { error } = await supabase
+      .from('renstra_tujuan')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw new Error('Gagal menghapus Perencanaan dari Database: ' + error.message);
+    await fetchPerencanaan();
   };
 
   return { perencanaan, loading, error, refetch: fetchPerencanaan, addTujuan, updateTujuan, deleteTujuan };
 }
 
-// Hook for Programs (Renstra Program)
+// Hook for Programs (Renstra Program) directly from Supabase DB
 export function usePrograms() {
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchPrograms = useCallback(async () => {
-    const deletedIds = getDeletedIds('programs');
     try {
+      setLoading(true);
       const { data, error: err } = await supabase
         .from('renstra_program')
         .select(`
@@ -233,13 +182,14 @@ export function usePrograms() {
             raw: p,
           };
         });
-        setPrograms(formatted.filter(p => !deletedIds.includes(String(p.id))));
+        setPrograms(formatted);
       } else {
-        setPrograms(initialPrograms.filter(p => !deletedIds.includes(String(p.id))));
+        setPrograms([]);
       }
+      setError(null);
     } catch (err) {
-      console.warn('Falling back to initialPrograms:', err.message);
-      setPrograms(initialPrograms.filter(p => !deletedIds.includes(String(p.id))));
+      console.error('Error fetching renstra_program from Supabase DB:', err.message);
+      setPrograms([]);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -251,88 +201,72 @@ export function usePrograms() {
   }, [fetchPrograms]);
 
   const addProgram = async (newProgram) => {
-    try {
-      let sasId = newProgram.perencanaanId || newProgram.sasaranId;
-      if (!sasId) {
-        const { data: sasData } = await supabase.from('renstra_sasaran').select('id').limit(1);
-        sasId = sasData?.[0]?.id || 1;
-      }
-
-      const { data, error } = await supabase
-        .from('renstra_program')
-        .insert([{
-          deskripsi_program: newProgram.nama,
-          sasaran_id: sasId,
-          sumber_anggaran: 'APBD',
-          anggaran_tahun_1: newProgram.anggaranPagu || 0,
-        }])
-        .select();
-
-      if (error) throw error;
-      await fetchPrograms();
-      return data;
-    } catch {
-      console.warn('Adding to local state fallback');
-      const item = { ...newProgram, id: Date.now() };
-      setPrograms(prev => [...prev, item]);
-      return [item];
+    let sasId = newProgram.perencanaanId || newProgram.sasaranId;
+    if (!sasId) {
+      const { data: sasData } = await supabase.from('renstra_sasaran').select('id').limit(1);
+      sasId = sasData?.[0]?.id || 1;
     }
+
+    const { data, error } = await supabase
+      .from('renstra_program')
+      .insert([{
+        deskripsi_program: newProgram.nama,
+        sasaran_id: sasId,
+        sumber_anggaran: 'APBD',
+        anggaran_tahun_1: newProgram.anggaranPagu || 0,
+      }])
+      .select();
+
+    if (error) throw new Error('Gagal menambah Program di Database: ' + error.message);
+    await fetchPrograms();
+    return data;
   };
 
   const updateProgram = async (id, updated) => {
-    try {
-      const { error } = await supabase
-        .from('renstra_program')
-        .update({
-          deskripsi_program: updated.nama,
-          sasaran_id: updated.perencanaanId || updated.sasaranId,
-          anggaran_tahun_1: updated.anggaranPagu || 0,
-        })
-        .eq('id', id);
+    const { error } = await supabase
+      .from('renstra_program')
+      .update({
+        deskripsi_program: updated.nama,
+        sasaran_id: updated.perencanaanId || updated.sasaranId,
+        anggaran_tahun_1: updated.anggaranPagu || 0,
+      })
+      .eq('id', id);
 
-      if (error) throw error;
-      await fetchPrograms();
-    } catch {
-      setPrograms(prev => prev.map(p => String(p.id) === String(id) ? { ...p, ...updated } : p));
-    }
+    if (error) throw new Error('Gagal memperbarui Program di Database: ' + error.message);
+    await fetchPrograms();
   };
 
   const deleteProgram = async (id) => {
-    try {
-      // Cascade delete child kegiatan & sub_kegiatan first in Supabase
-      const { data: childKeg } = await supabase.from('renstra_kegiatan').select('id').eq('program_id', id);
-      if (childKeg && childKeg.length > 0) {
-        const kegIds = childKeg.map(k => k.id);
-        await supabase.from('renstra_sub_kegiatan').delete().in('kegiatan_id', kegIds);
-        await supabase.from('renstra_kegiatan').delete().eq('program_id', id);
-      }
-
-      const { error } = await supabase
-        .from('renstra_program')
-        .delete()
-        .eq('id', id);
-
-      if (error) console.error('Supabase delete error for program:', error);
-    } catch (err) {
-      console.error('Exception deleting program:', err);
-    } finally {
-      saveDeletedId('programs', id);
-      setPrograms(prev => prev.filter(p => String(p.id) !== String(id)));
+    // 1. Delete child kegiatan & sub_kegiatan in database first
+    const { data: childKeg } = await supabase.from('renstra_kegiatan').select('id').eq('program_id', id);
+    if (childKeg && childKeg.length > 0) {
+      const kegIds = childKeg.map(k => k.id);
+      await supabase.from('renstra_sub_kegiatan').delete().in('kegiatan_id', kegIds);
+      await supabase.from('renstra_kegiatan').delete().eq('program_id', id);
     }
+
+    // 2. Delete main row from renstra_program table in database
+    const { error } = await supabase
+      .from('renstra_program')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw new Error('Gagal menghapus Program dari Database: ' + error.message);
+    await fetchPrograms();
   };
 
   return { programs, loading, error, refetch: fetchPrograms, addProgram, updateProgram, deleteProgram };
 }
 
-// Hook for Kegiatan (Renstra Kegiatan)
+// Hook for Kegiatan (Renstra Kegiatan) directly from Supabase DB
 export function useKegiatan() {
   const [kegiatan, setKegiatan] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchKegiatan = useCallback(async () => {
-    const deletedIds = getDeletedIds('kegiatan');
     try {
+      setLoading(true);
       const { data, error: err } = await supabase
         .from('renstra_kegiatan')
         .select(`
@@ -367,13 +301,14 @@ export function useKegiatan() {
             raw: k,
           };
         });
-        setKegiatan(formatted.filter(k => !deletedIds.includes(String(k.id))));
+        setKegiatan(formatted);
       } else {
-        setKegiatan(initialKegiatan.filter(k => !deletedIds.includes(String(k.id))));
+        setKegiatan([]);
       }
+      setError(null);
     } catch (err) {
-      console.warn('Falling back to initialKegiatan:', err.message);
-      setKegiatan(initialKegiatan.filter(k => !deletedIds.includes(String(k.id))));
+      console.error('Error fetching renstra_kegiatan from Supabase DB:', err.message);
+      setKegiatan([]);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -385,83 +320,67 @@ export function useKegiatan() {
   }, [fetchKegiatan]);
 
   const addKegiatan = async (newKegiatan) => {
-    try {
-      let progId = newKegiatan.programId;
-      if (!progId) {
-        const { data: pData } = await supabase.from('renstra_program').select('id').limit(1);
-        progId = pData?.[0]?.id || 1;
-      }
-
-      const { data, error } = await supabase
-        .from('renstra_kegiatan')
-        .insert([{
-          deskripsi_kegiatan: newKegiatan.nama,
-          program_id: progId,
-          sumber_anggaran: 'APBD',
-          anggaran_tahun_1: newKegiatan.anggaran || 0,
-        }])
-        .select();
-
-      if (error) throw error;
-      await fetchKegiatan();
-      return data;
-    } catch {
-      console.warn('Adding to local state fallback');
-      const item = { ...newKegiatan, id: Date.now() };
-      setKegiatan(prev => [...prev, item]);
-      return [item];
+    let progId = newKegiatan.programId;
+    if (!progId) {
+      const { data: pData } = await supabase.from('renstra_program').select('id').limit(1);
+      progId = pData?.[0]?.id || 1;
     }
+
+    const { data, error } = await supabase
+      .from('renstra_kegiatan')
+      .insert([{
+        deskripsi_kegiatan: newKegiatan.nama,
+        program_id: progId,
+        sumber_anggaran: 'APBD',
+        anggaran_tahun_1: newKegiatan.anggaran || 0,
+      }])
+      .select();
+
+    if (error) throw new Error('Gagal menambah Kegiatan di Database: ' + error.message);
+    await fetchKegiatan();
+    return data;
   };
 
   const updateKegiatan = async (id, updated) => {
-    try {
-      const { error } = await supabase
-        .from('renstra_kegiatan')
-        .update({
-          deskripsi_kegiatan: updated.nama,
-          program_id: updated.programId,
-          anggaran_tahun_1: updated.anggaran || 0,
-        })
-        .eq('id', id);
+    const { error } = await supabase
+      .from('renstra_kegiatan')
+      .update({
+        deskripsi_kegiatan: updated.nama,
+        program_id: updated.programId,
+        anggaran_tahun_1: updated.anggaran || 0,
+      })
+      .eq('id', id);
 
-      if (error) throw error;
-      await fetchKegiatan();
-    } catch {
-      setKegiatan(prev => prev.map(k => String(k.id) === String(id) ? { ...k, ...updated } : k));
-    }
+    if (error) throw new Error('Gagal memperbarui Kegiatan di Database: ' + error.message);
+    await fetchKegiatan();
   };
 
   const deleteKegiatan = async (id) => {
-    try {
-      // Cascade delete child sub_kegiatan first in Supabase
-      await supabase.from('renstra_sub_kegiatan').delete().eq('kegiatan_id', id);
+    // 1. Delete child sub_kegiatan in database first
+    await supabase.from('renstra_sub_kegiatan').delete().eq('kegiatan_id', id);
 
-      const { error } = await supabase
-        .from('renstra_kegiatan')
-        .delete()
-        .eq('id', id);
+    // 2. Delete main row from renstra_kegiatan table in database
+    const { error } = await supabase
+      .from('renstra_kegiatan')
+      .delete()
+      .eq('id', id);
 
-      if (error) console.error('Supabase delete error for kegiatan:', error);
-    } catch (err) {
-      console.error('Exception deleting kegiatan:', err);
-    } finally {
-      saveDeletedId('kegiatan', id);
-      setKegiatan(prev => prev.filter(k => String(k.id) !== String(id)));
-    }
+    if (error) throw new Error('Gagal menghapus Kegiatan dari Database: ' + error.message);
+    await fetchKegiatan();
   };
 
   return { kegiatan, loading, error, refetch: fetchKegiatan, addKegiatan, updateKegiatan, deleteKegiatan };
 }
 
-// Hook for Sub Kegiatan (Renstra Sub Kegiatan)
+// Hook for Sub Kegiatan (Renstra Sub Kegiatan) directly from Supabase DB
 export function useSubKegiatan() {
   const [subKegiatan, setSubKegiatan] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchSubKegiatan = useCallback(async () => {
-    const deletedIds = getDeletedIds('subKegiatan');
     try {
+      setLoading(true);
       const { data, error: err } = await supabase
         .from('renstra_sub_kegiatan')
         .select(`
@@ -496,13 +415,14 @@ export function useSubKegiatan() {
             raw: sk,
           };
         });
-        setSubKegiatan(formatted.filter(sk => !deletedIds.includes(String(sk.id))));
+        setSubKegiatan(formatted);
       } else {
-        setSubKegiatan(initialSubKegiatan.filter(sk => !deletedIds.includes(String(sk.id))));
+        setSubKegiatan([]);
       }
+      setError(null);
     } catch (err) {
-      console.warn('Falling back to initialSubKegiatan:', err.message);
-      setSubKegiatan(initialSubKegiatan.filter(sk => !deletedIds.includes(String(sk.id))));
+      console.error('Error fetching renstra_sub_kegiatan from Supabase DB:', err.message);
+      setSubKegiatan([]);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -514,72 +434,55 @@ export function useSubKegiatan() {
   }, [fetchSubKegiatan]);
 
   const addSubKegiatan = async (newSub) => {
-    try {
-      let kegId = newSub.kegiatanId;
-      if (!kegId) {
-        const { data: kData } = await supabase.from('renstra_kegiatan').select('id').limit(1);
-        kegId = kData?.[0]?.id || 1;
-      }
-
-      const { data, error } = await supabase
-        .from('renstra_sub_kegiatan')
-        .insert([{
-          deskripsi_sub_kegiatan: newSub.nama,
-          kegiatan_id: kegId,
-          sumber_anggaran: 'APBD',
-          anggaran_tahun_1: newSub.anggaran || 0,
-        }])
-        .select();
-
-      if (error) throw error;
-      await fetchSubKegiatan();
-      return data;
-    } catch {
-      console.warn('Adding to local state fallback');
-      const item = { ...newSub, id: Date.now() };
-      setSubKegiatan(prev => [...prev, item]);
-      return [item];
+    let kegId = newSub.kegiatanId;
+    if (!kegId) {
+      const { data: kData } = await supabase.from('renstra_kegiatan').select('id').limit(1);
+      kegId = kData?.[0]?.id || 1;
     }
+
+    const { data, error } = await supabase
+      .from('renstra_sub_kegiatan')
+      .insert([{
+        deskripsi_sub_kegiatan: newSub.nama,
+        kegiatan_id: kegId,
+        sumber_anggaran: 'APBD',
+        anggaran_tahun_1: newSub.anggaran || 0,
+      }])
+      .select();
+
+    if (error) throw new Error('Gagal menambah Sub Kegiatan di Database: ' + error.message);
+    await fetchSubKegiatan();
+    return data;
   };
 
   const updateSubKegiatan = async (id, updated) => {
-    try {
-      const { error } = await supabase
-        .from('renstra_sub_kegiatan')
-        .update({
-          deskripsi_sub_kegiatan: updated.nama,
-          kegiatan_id: updated.kegiatanId,
-          anggaran_tahun_1: updated.anggaran || 0,
-        })
-        .eq('id', id);
+    const { error } = await supabase
+      .from('renstra_sub_kegiatan')
+      .update({
+        deskripsi_sub_kegiatan: updated.nama,
+        kegiatan_id: updated.kegiatanId,
+        anggaran_tahun_1: updated.anggaran || 0,
+      })
+      .eq('id', id);
 
-      if (error) throw error;
-      await fetchSubKegiatan();
-    } catch {
-      setSubKegiatan(prev => prev.map(s => String(s.id) === String(id) ? { ...s, ...updated } : s));
-    }
+    if (error) throw new Error('Gagal memperbarui Sub Kegiatan di Database: ' + error.message);
+    await fetchSubKegiatan();
   };
 
   const deleteSubKegiatan = async (id) => {
-    try {
-      const { error } = await supabase
-        .from('renstra_sub_kegiatan')
-        .delete()
-        .eq('id', id);
+    const { error } = await supabase
+      .from('renstra_sub_kegiatan')
+      .delete()
+      .eq('id', id);
 
-      if (error) console.error('Supabase delete error for sub kegiatan:', error);
-    } catch (err) {
-      console.error('Exception deleting sub kegiatan:', err);
-    } finally {
-      saveDeletedId('subKegiatan', id);
-      setSubKegiatan(prev => prev.filter(s => String(s.id) !== String(id)));
-    }
+    if (error) throw new Error('Gagal menghapus Sub Kegiatan dari Database: ' + error.message);
+    await fetchSubKegiatan();
   };
 
   return { subKegiatan, loading, error, refetch: fetchSubKegiatan, addSubKegiatan, updateSubKegiatan, deleteSubKegiatan };
 }
 
-// Hook for Penanggung Jawab
+// Hook for Penanggung Jawab directly from Supabase DB
 export function usePenanggungJawab() {
   const [penanggungJawab, setPenanggungJawab] = useState([]);
   const [loading, setLoading] = useState(true);

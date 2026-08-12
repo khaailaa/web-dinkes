@@ -31,15 +31,15 @@ function saveToStorage(state) {
   }
 }
 
-const DATA_VERSION = 6; // increment for account presets update & monev removal
+const DATA_VERSION = 7; // pure database mode
 
 const defaultState = {
   _version: DATA_VERSION,
   currentUser: ACCOUNT_PRESETS[0], // default Sekretariat / Admin
-  perencanaan: initialPerencanaan,
-  programs: initialPrograms,
-  kegiatan: initialKegiatan,
-  subKegiatan: initialSubKegiatan,
+  perencanaan: [],
+  programs: [],
+  kegiatan: [],
+  subKegiatan: [],
   users: initialUsers,
   activities: initialActivities,
   selectedYear: 2025,
