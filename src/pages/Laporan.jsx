@@ -1,12 +1,11 @@
 import { useMemo } from 'react';
 import { formatAnggaranShort } from '../data/initialData';
-import { usePerencanaan, usePrograms, useKegiatan, useSubKegiatan } from '../hooks/useSupabase';
+import { usePrograms, useKegiatan, useSubKegiatan } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
 import { Printer, Loader2 } from 'lucide-react';
 import TabelMatriksRenstra from '../components/TabelMatriksRenstra';
 
 export default function Laporan() {
-  const { perencanaan, loading: loadingPerencanaan } = usePerencanaan();
   const { programs, loading: loadingProg } = usePrograms();
   const { kegiatan, loading: loadingKeg } = useKegiatan();
   const { subKegiatan, loading: loadingSub } = useSubKegiatan();
@@ -14,12 +13,7 @@ export default function Laporan() {
   const currentUser = state.currentUser;
   const userBidang = currentUser?.bidang;
 
-  const loading = loadingPerencanaan || loadingProg || loadingKeg || loadingSub;
-
-  const scopedPerencanaan = useMemo(() => {
-    if (!userBidang || userBidang === 'Semua') return perencanaan;
-    return perencanaan.filter(p => !p.bidang || p.bidang === userBidang);
-  }, [perencanaan, userBidang]);
+  const loading = loadingProg || loadingKeg || loadingSub;
 
   const scopedPrograms = useMemo(() => {
     if (!userBidang || userBidang === 'Semua') return programs;
@@ -41,13 +35,12 @@ export default function Laporan() {
       scopedPrograms.reduce((s, p) => s + (p.anggaranPagu || 0), 0);
 
     return {
-      perencanaan: scopedPerencanaan.length,
       program: scopedPrograms.length,
       kegiatan: scopedKegiatan.length,
       subKegiatan: scopedSubKegiatan.length,
       totalPagu,
     };
-  }, [scopedPerencanaan, scopedPrograms, scopedKegiatan, scopedSubKegiatan]);
+  }, [scopedPrograms, scopedKegiatan, scopedSubKegiatan]);
 
   return (
     <div className="fade-in">
@@ -56,7 +49,7 @@ export default function Laporan() {
         <div className="page-header">
           <h1>Tabel Matriks Renstra</h1>
           <p>
-            Keterhitungan Perencanaan ➔ Program ➔ Kegiatan ➔ Sub Kegiatan (Matriks SIPD)
+            Keterhitungan Program (Utama) ➔ Kegiatan ➔ Sub Kegiatan (Matriks SIPD)
             {userBidang && userBidang !== 'Semua' && ` — Laporan Khusus Bidang ${userBidang}`}
           </p>
         </div>
@@ -75,15 +68,10 @@ export default function Laporan() {
         </div>
       ) : (
         <>
-          {/* Top 5 Stat Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          {/* Stat Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
             <div className="card" style={{ padding: '16px 20px', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>PERENCANAAN</div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px' }}>{stats.perencanaan}</div>
-            </div>
-
-            <div className="card" style={{ padding: '16px 20px', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>TOTAL PROGRAM</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>TOTAL PROGRAM (UTAMA)</div>
               <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px' }}>{stats.program}</div>
             </div>
 
@@ -107,7 +95,7 @@ export default function Laporan() {
           <div className="card" style={{ padding: '16px' }}>
             <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
-                Matriks Perencanaan, Program, Kegiatan & Sub Kegiatan {userBidang && userBidang !== 'Semua' ? `(Bidang ${userBidang})` : ''}
+                Matriks Program, Kegiatan & Sub Kegiatan {userBidang && userBidang !== 'Semua' ? `(Bidang ${userBidang})` : ''}
               </h3>
             </div>
 

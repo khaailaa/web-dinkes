@@ -5,14 +5,13 @@ import Modal from '../components/Modal';
 import FilterSearchBar from '../components/FilterSearchBar';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { formatAnggaranShort, statusList } from '../data/initialData';
-import { usePrograms, usePerencanaan } from '../hooks/useSupabase';
+import { usePrograms } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
-import { Plus, Search, FolderKanban, CheckCircle2, Clock, XCircle, Trash2, Edit3, Loader2 } from 'lucide-react';
+import { Plus, FolderKanban, CheckCircle2, Clock, XCircle, Trash2, Edit3, Loader2 } from 'lucide-react';
 
 const emptyForm = {
   kode: '',
   nama: '',
-  perencanaanId: '',
   sasaran: '',
   indikator: '',
   target: '',
@@ -26,10 +25,7 @@ const emptyForm = {
 
 export default function Program() {
   const { programs, loading, addProgram, updateProgram, deleteProgram } = usePrograms();
-  const { perencanaan } = usePerencanaan();
   const { state, dispatch } = useApp();
-  const currentUser = state.currentUser;
-  const userBidang = currentUser?.bidang;
 
   const [showModal, setShowModal] = useState(false);
   const [showDelete, setShowDelete] = useState(null);
@@ -80,29 +76,19 @@ export default function Program() {
 
   const openAdd = () => {
     setEditItem(null);
-    setForm({
-      ...emptyForm,
-      perencanaanId: perencanaan.length > 0 ? perencanaan[0].id : '',
-    });
+    setForm(emptyForm);
     setShowModal(true);
   };
 
   const openEdit = (item) => {
     setEditItem(item);
-    setForm({
-      ...item,
-      perencanaanId: item.perencanaanId || (perencanaan.length > 0 ? perencanaan[0].id : ''),
-    });
+    setForm({ ...item });
     setShowModal(true);
   };
 
   const handleSave = async () => {
     if (!form.nama.trim()) {
       alert('Nama Program wajib diisi');
-      return;
-    }
-    if (!form.perencanaanId) {
-      alert('Silakan pilih Perencanaan Parent terlebih dahulu');
       return;
     }
 
@@ -141,8 +127,8 @@ export default function Program() {
     <div className="fade-in">
       <div className="page-header-actions">
         <div className="page-header">
-          <h1>Program</h1>
-          <p>Daftar Program Renstra Dinas Kesehatan Kabupaten Garut</p>
+          <h1>Program (Hirarki Utama)</h1>
+          <p>Daftar Program Kerja Dinas Kesehatan Kabupaten Garut</p>
         </div>
         <button className="btn btn-primary" onClick={openAdd}>
           <Plus size={16} /> Tambah Program
@@ -214,7 +200,6 @@ export default function Program() {
                 <tr>
                   <th>KODE</th>
                   <th>NAMA PROGRAM</th>
-                  <th>PERENCANAAN PARENT</th>
                   <th>SASARAN</th>
                   <th>INDIKATOR</th>
                   <th>TARGET</th>
@@ -226,14 +211,10 @@ export default function Program() {
               </thead>
               <tbody>
                 {filtered.map((item) => {
-                  const parentP = perencanaan.find(
-                    p => String(p.id) === String(item.perencanaanId) || String(p.tujuanId) === String(item.perencanaanId)
-                  );
-
                   const pct = (item.capaian !== undefined && item.capaian !== null && item.capaian !== '')
                     ? Number(item.capaian)
                     : (item.status === 'Tercapai' ? 100 : item.status === 'Belum Tercapai' ? 45 : 75);
-                  
+
                   let barColor = '#4caf50';
                   if (pct < 50) barColor = '#f44336';
                   else if (pct < 75) barColor = '#ff9800';
@@ -244,11 +225,6 @@ export default function Program() {
                       <td><span className="code-badge">{item.kode || '-'}</span></td>
                       <td>
                         <div style={{ fontWeight: 600, color: '#2196f3' }}>{item.nama}</div>
-                      </td>
-                      <td>
-                        <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>
-                          {parentP ? parentP.nama : (item.sasaranName || 'Renstra Garut 2025')}
-                        </div>
                       </td>
                       <td><div style={{ fontSize: '0.82rem' }}>{item.sasaran || item.deskripsi || '-'}</div></td>
                       <td><div style={{ fontSize: '0.82rem' }}>{item.indikator || 'SAKIP'}</div></td>
@@ -278,7 +254,7 @@ export default function Program() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={10}>
+                    <td colSpan={9}>
                       <div className="empty-state">
                         <div className="icon">📂</div>
                         <h3>Tidak ada data</h3>
@@ -307,22 +283,6 @@ export default function Program() {
           </>
         }
       >
-        <div className="form-group">
-          <label className="form-label">Pilih Perencanaan Parent (Renstra Tujuan) <span className="required">*</span></label>
-          <select
-            className="form-select"
-            value={form.perencanaanId}
-            onChange={e => setForm({ ...form, perencanaanId: e.target.value })}
-          >
-            <option value="">-- Pilih Perencanaan --</option>
-            {perencanaan.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.kode ? `[${p.kode}] ` : ''}{p.nama}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Kode Program</label>

@@ -31,12 +31,11 @@ function saveToStorage(state) {
   }
 }
 
-const DATA_VERSION = 7; // pure database mode
+const DATA_VERSION = 8; // hierarchy: Program -> Kegiatan -> SubKegiatan
 
 const defaultState = {
   _version: DATA_VERSION,
   currentUser: ACCOUNT_PRESETS[0], // default Sekretariat / Admin
-  perencanaan: [],
   programs: [],
   kegiatan: [],
   subKegiatan: [],
@@ -62,7 +61,7 @@ function getInitialState() {
       return { ...defaultState, _version: DATA_VERSION };
     }
     // Ensure all required arrays exist and are arrays
-    const required = ['perencanaan','programs','kegiatan','subKegiatan','users','activities'];
+    const required = ['programs','kegiatan','subKegiatan','users','activities'];
     for (const key of required) {
       if (!Array.isArray(stored[key])) {
         localStorage.removeItem(STORAGE_KEY);
@@ -121,17 +120,6 @@ function handleDeleteItem(state, key, label, id) {
 function reducer(state, action) {
   let newState;
   switch (action.type) {
-    // Perencanaan
-    case 'ADD_PERENCANAAN':
-      newState = handleAddItem(state, 'perencanaan', 'perencanaan', action.payload);
-      break;
-    case 'UPDATE_PERENCANAAN':
-      newState = handleUpdateItem(state, 'perencanaan', 'perencanaan', action.payload);
-      break;
-    case 'DELETE_PERENCANAAN':
-      newState = handleDeleteItem(state, 'perencanaan', 'perencanaan', action.payload);
-      break;
-
     // Programs
     case 'ADD_PROGRAM':
       newState = handleAddItem(state, 'programs', 'program', action.payload);

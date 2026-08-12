@@ -2,7 +2,6 @@ import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Perencanaan from './pages/Perencanaan';
 import Program from './pages/Program';
 import Kegiatan from './pages/Kegiatan';
 import SubKegiatan from './pages/SubKegiatan';
@@ -17,7 +16,6 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/perencanaan" element={<Perencanaan />} />
         <Route path="/program" element={<Program />} />
         <Route path="/kegiatan" element={<Kegiatan />} />
         <Route path="/sub-kegiatan" element={<SubKegiatan />} />

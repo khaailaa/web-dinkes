@@ -11,7 +11,6 @@ import {
 
 const rawMenuItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard, color: '#2196f3' },
-  { path: '/perencanaan', label: 'Perencanaan', icon: FileText, color: '#ff9800' },
   { path: '/program', label: 'Program', icon: FolderKanban, color: '#4caf50' },
   { path: '/kegiatan', label: 'Kegiatan', icon: CalendarCheck, color: '#f44336' },
   { path: '/sub-kegiatan', label: 'Sub Kegiatan', icon: ListChecks, color: '#9c27b0' },

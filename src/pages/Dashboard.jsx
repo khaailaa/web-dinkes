@@ -29,7 +29,6 @@ export default function Dashboard() {
   const { programs, loading: loadingPrograms } = usePrograms();
   const { kegiatan, loading: loadingKegiatan } = useKegiatan();
   const { subKegiatan, loading: loadingSub } = useSubKegiatan();
-  const perencanaan = state.perencanaan || [];
 
   const loading = loadingPrograms || loadingKegiatan || loadingSub;
 
@@ -70,7 +69,6 @@ export default function Dashboard() {
     const realisasiPersen = totalAnggaran > 0 ? Math.min(100, Math.round((totalRealisasi / totalAnggaran) * 100)) : 0;
 
     return {
-      totalPerencanaan: perencanaan.length,
       totalProgram: scopedPrograms.length,
       totalKegiatan: scopedKegiatan.length,
       totalSubKegiatan: scopedSubKegiatan.length,
@@ -82,7 +80,7 @@ export default function Dashboard() {
       totalAnggaran,
       totalRealisasi,
     };
-  }, [scopedPrograms, scopedKegiatan, scopedSubKegiatan, perencanaan]);
+  }, [scopedPrograms, scopedKegiatan, scopedSubKegiatan]);
 
   // Top 5 Best & Needing Attention programs
   const sortedTopPrograms = useMemo(() => {
@@ -287,16 +285,6 @@ export default function Dashboard() {
         <>
           {/* Top Primary Stat Cards Grid */}
           <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-            <StatCard
-              label="TOTAL PERENCANAAN"
-              value={stats.totalPerencanaan}
-              color="purple"
-              icon={<FileText size={22} />}
-              subtitle="Dokumen sasaran & indikator"
-              badge="Renstra"
-              badgeType="info"
-              to="/perencanaan"
-            />
             <StatCard
               label="TOTAL PROGRAM"
               value={stats.totalProgram}
