@@ -3,6 +3,7 @@ import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import FilterSearchBar from '../components/FilterSearchBar';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { formatAnggaranShort, statusList } from '../data/initialData';
 import { useSubKegiatan, useKegiatan } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
@@ -27,7 +28,7 @@ const emptyForm = {
 export default function SubKegiatan() {
   const { subKegiatan, loading, addSubKegiatan, updateSubKegiatan, deleteSubKegiatan } = useSubKegiatan();
   const { kegiatan } = useKegiatan();
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const currentUser = state.currentUser;
   const userBidang = currentUser?.bidang;
 
@@ -124,9 +125,11 @@ export default function SubKegiatan() {
   };
 
   const handleDelete = async (id) => {
+    if (!id) return;
     try {
       setSaving(true);
       await deleteSubKegiatan(id);
+      dispatch({ type: 'DELETE_SUB_KEGIATAN', payload: id });
       setShowDelete(null);
     } catch (err) {
       alert('Gagal menghapus sub kegiatan: ' + err.message);
@@ -386,21 +389,12 @@ export default function SubKegiatan() {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal
+      <ConfirmDeleteModal
         isOpen={!!showDelete}
         onClose={() => setShowDelete(null)}
-        title="Konfirmasi Hapus"
-        footer={
-          <>
-            <button className="btn btn-outline" onClick={() => setShowDelete(null)}>Batal</button>
-            <button className="btn btn-danger" onClick={() => handleDelete(showDelete)} disabled={saving}>
-              {saving ? 'Menghapus...' : 'Hapus'}
-            </button>
-          </>
-        }
-      >
-        <p>Apakah Anda yakin ingin menghapus sub kegiatan ini?</p>
-      </Modal>
+        onConfirm={() => handleDelete(showDelete)}
+        itemName="sub kegiatan ini"
+      />
     </div>
   );
 }

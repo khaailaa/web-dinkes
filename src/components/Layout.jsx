@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ACCOUNT_PRESETS } from '../data/initialData';
 import {
   LayoutDashboard, FileText, FolderKanban, CalendarCheck,
-  ListChecks, Activity, ClipboardCheck, BarChart3, FileSpreadsheet,
+  ListChecks, BarChart3, FileSpreadsheet,
   Users, Settings, Search, Bell, Menu, ChevronRight, HelpCircle,
   User, LogOut, ShieldAlert, GitFork, Lock
 } from 'lucide-react';
@@ -16,9 +16,6 @@ const rawMenuItems = [
   { path: '/kegiatan', label: 'Kegiatan', icon: CalendarCheck, color: '#f44336' },
   { path: '/sub-kegiatan', label: 'Sub Kegiatan', icon: ListChecks, color: '#9c27b0' },
   { divider: true },
-  { path: '/monitoring', label: 'Monitoring', icon: Activity, color: '#00bcd4' },
-  { path: '/evaluasi', label: 'Evaluasi', icon: ClipboardCheck, color: '#4caf50' },
-  { path: '/dashboard-analitik', label: 'Dashboard Analitik', icon: BarChart3, color: '#2196f3' },
   { path: '/laporan', label: 'Laporan', icon: FileSpreadsheet, color: '#607d8b' },
   { path: '/bagan-pohon', label: 'Bagan Pohon', icon: GitFork, color: '#8b5cf6' },
   { divider: true },

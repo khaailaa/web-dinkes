@@ -1,13 +1,13 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import RoleQuickSwitcher from '../components/RoleQuickSwitcher';
-import { formatAnggaranShort, getBidangColor, chartData, bidangList } from '../data/initialData';
+import { formatAnggaranShort, getBidangColor, chartData, bidangList, getProgressColor } from '../data/initialData';
 import { usePrograms, useKegiatan, useSubKegiatan } from '../hooks/useSupabase';
 import {
-  FolderKanban, CalendarCheck, ListChecks, Building2,
+  FolderKanban, CalendarCheck, ListChecks, FileText,
   CheckCircle2, XCircle, TrendingUp, Wallet, Download, Loader2
 } from 'lucide-react';
 import {
@@ -29,29 +29,38 @@ export default function Dashboard() {
   const { programs, loading: loadingPrograms } = usePrograms();
   const { kegiatan, loading: loadingKegiatan } = useKegiatan();
   const { subKegiatan, loading: loadingSub } = useSubKegiatan();
+  const perencanaan = state.perencanaan || [];
 
   const loading = loadingPrograms || loadingKegiatan || loadingSub;
 
   const currentUser = state.currentUser;
   const userBidang = currentUser?.bidang;
 
+  const [selectedBidang, setSelectedBidang] = useState('Semua');
+
+  // Determine active scope (if logged in user is restricted to a specific Bidang, enforce it)
+  const activeScopeBidang = userBidang && userBidang !== 'Semua' ? userBidang : selectedBidang;
+
+  // Filtered data based on active scope
   const scopedPrograms = useMemo(() => {
-    if (!userBidang || userBidang === 'Semua') return programs;
-    return programs.filter(p => !p.bidang || p.bidang === userBidang);
-  }, [programs, userBidang]);
+    if (activeScopeBidang === 'Semua') return programs;
+    return programs.filter(p => !p.bidang || p.bidang === activeScopeBidang);
+  }, [programs, activeScopeBidang]);
 
   const scopedKegiatan = useMemo(() => {
-    if (!userBidang || userBidang === 'Semua') return kegiatan;
-    return kegiatan.filter(k => !k.bidang || k.bidang === userBidang);
-  }, [kegiatan, userBidang]);
+    if (activeScopeBidang === 'Semua') return kegiatan;
+    return kegiatan.filter(k => !k.bidang || k.bidang === activeScopeBidang);
+  }, [kegiatan, activeScopeBidang]);
 
   const scopedSubKegiatan = useMemo(() => {
-    if (!userBidang || userBidang === 'Semua') return subKegiatan;
-    return subKegiatan.filter(sk => !sk.bidang || sk.bidang === userBidang);
-  }, [subKegiatan, userBidang]);
+    if (activeScopeBidang === 'Semua') return subKegiatan;
+    return subKegiatan.filter(sk => !sk.bidang || sk.bidang === activeScopeBidang);
+  }, [subKegiatan, activeScopeBidang]);
 
+  // Overall Statistics
   const stats = useMemo(() => {
     const tercapai = scopedPrograms.filter(p => p.status === 'Tercapai').length;
+    const proses = scopedPrograms.filter(p => p.status === 'Dalam Proses').length;
     const belumTercapai = scopedPrograms.filter(p => p.status === 'Belum Tercapai').length;
     const totalAnggaran = scopedPrograms.reduce((sum, p) => sum + (p.anggaranPagu || 0), 0);
     const totalRealisasi = scopedPrograms.reduce((sum, p) => sum + (p.anggaranRealisasi || 0), 0);
@@ -61,66 +70,118 @@ export default function Dashboard() {
     const realisasiPersen = totalAnggaran > 0 ? Math.min(100, Math.round((totalRealisasi / totalAnggaran) * 100)) : 0;
 
     return {
+      totalPerencanaan: perencanaan.length,
       totalProgram: scopedPrograms.length,
       totalKegiatan: scopedKegiatan.length,
       totalSubKegiatan: scopedSubKegiatan.length,
-      totalBidang: userBidang && userBidang !== 'Semua' ? 1 : bidangList.length,
       tercapai,
+      proses,
       belumTercapai,
       avgCapaian,
       realisasiPersen,
       totalAnggaran,
       totalRealisasi,
     };
-  }, [scopedPrograms, scopedKegiatan, scopedSubKegiatan, userBidang]);
+  }, [scopedPrograms, scopedKegiatan, scopedSubKegiatan, perencanaan]);
 
-  const statusCounts = useMemo(() => ({
-    tercapai: scopedPrograms.filter(p => p.status === 'Tercapai').length,
-    proses: scopedPrograms.filter(p => p.status === 'Dalam Proses').length,
-    belum: scopedPrograms.filter(p => p.status === 'Belum Tercapai').length,
-  }), [scopedPrograms]);
+  // Top 5 Best & Needing Attention programs
+  const sortedTopPrograms = useMemo(() => {
+    return [...scopedPrograms].sort((a, b) => (b.capaian || 0) - (a.capaian || 0)).slice(0, 5);
+  }, [scopedPrograms]);
 
-  // Bar chart config
-  const barChartData = {
-    labels: chartData.capaianPerBidang.labels,
-    datasets: [
-      {
-        label: 'Realisasi',
-        data: chartData.capaianPerBidang.realisasi,
-        backgroundColor: '#1a3a5c',
-        borderRadius: 4,
-        barPercentage: 0.6,
-        categoryPercentage: 0.7,
-      },
-      {
-        label: 'Target',
-        data: chartData.capaianPerBidang.target,
-        backgroundColor: '#cbd5e1',
-        borderRadius: 4,
-        barPercentage: 0.6,
-        categoryPercentage: 0.7,
-      },
-    ],
-  };
+  const sortedAttentionPrograms = useMemo(() => {
+    return [...scopedPrograms].sort((a, b) => (a.capaian || 0) - (b.capaian || 0)).slice(0, 5);
+  }, [scopedPrograms]);
 
-  const barChartOptions = {
+  // Grouped Bar Chart: Capaian vs Realisasi Anggaran per Bidang
+  const groupedBarData = useMemo(() => {
+    const activeBidangList = activeScopeBidang === 'Semua' ? bidangList : [activeScopeBidang];
+    const capaianData = activeBidangList.map(b => {
+      const progs = programs.filter(p => p.bidang === b);
+      return progs.length > 0 ? Math.min(100, Math.round(progs.reduce((s, p) => s + Math.min(p.capaian || 0, 100), 0) / progs.length)) : 0;
+    });
+    const realisasiData = activeBidangList.map(b => {
+      const progs = programs.filter(p => p.bidang === b);
+      const real = progs.reduce((s, p) => s + (p.anggaranRealisasi || 0), 0);
+      return Math.round(real / 1000000);
+    });
+
+    return {
+      labels: activeBidangList,
+      datasets: [
+        {
+          label: 'Capaian Kinerja (%)',
+          data: capaianData,
+          backgroundColor: '#0f2744',
+          borderRadius: 4,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Realisasi Anggaran (Jt)',
+          data: realisasiData,
+          backgroundColor: '#00a86b',
+          borderRadius: 4,
+          yAxisID: 'y1',
+        },
+      ],
+    };
+  }, [programs, activeScopeBidang]);
+
+  const groupedBarOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { size: 12, family: 'Inter' } } },
+      legend: { position: 'bottom', labels: { usePointStyle: true, font: { family: 'Inter', size: 11 } } },
       tooltip: { backgroundColor: '#1a2332', titleFont: { family: 'Inter' }, bodyFont: { family: 'Inter' } },
     },
     scales: {
-      y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%', font: { size: 11, family: 'Inter' } }, grid: { color: '#f0f0f0' } },
+      y: {
+        type: 'linear',
+        display: true,
+        position: 'left',
+        beginAtZero: true,
+        max: 100,
+        ticks: { callback: v => `${v}%`, font: { size: 10, family: 'Inter' } },
+        grid: { color: '#f0f0f0' },
+      },
+      y1: {
+        type: 'linear',
+        display: true,
+        position: 'right',
+        beginAtZero: true,
+        ticks: { callback: v => `${v} Jt`, font: { size: 10, family: 'Inter' } },
+        grid: { display: false },
+      },
       x: { ticks: { font: { size: 11, family: 'Inter' } }, grid: { display: false } },
     },
   };
 
-  // Line chart - Perkembangan Bulanan
+  // Doughnut Chart: Status Program
+  const statusTotal = stats.tercapai + stats.proses + stats.belumTercapai;
+  const doughnutData = {
+    labels: ['Tercapai', 'Dalam Proses', 'Belum Tercapai'],
+    datasets: [{
+      data: [stats.tercapai, stats.proses, stats.belumTercapai],
+      backgroundColor: ['#00a86b', '#ff9800', '#f44336'],
+      borderWidth: 0,
+      hoverOffset: 4,
+    }],
+  };
+
+  const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '72%',
+    plugins: {
+      legend: { display: false },
+    },
+  };
+
+  // Line Chart: Perkembangan Bulanan / Kuartalan
   const lineChartData = {
     labels: chartData.perkembanganBulanan.labels,
     datasets: [{
-      label: 'Capaian %',
+      label: 'Capaian Kinerja %',
       data: chartData.perkembanganBulanan.data.map(d => d || null),
       borderColor: '#2196f3',
       backgroundColor: 'rgba(33, 150, 243, 0.08)',
@@ -144,23 +205,28 @@ export default function Dashboard() {
     },
   };
 
-  // Doughnut chart - Status Program
-  const doughnutData = {
-    labels: ['Tercapai', 'Dalam Proses', 'Belum Tercapai'],
-    datasets: [{
-      data: [statusCounts.tercapai, statusCounts.proses, statusCounts.belum],
-      backgroundColor: ['#4caf50', '#ff9800', '#f44336'],
-      borderWidth: 0,
-      hoverOffset: 4,
-    }],
+  // Correlation Chart
+  const correlationData = {
+    labels: ['96%', '104%', '90%', '105%', '78%'],
+    datasets: [
+      {
+        label: 'Serapan (%)',
+        data: [88, 85, 83, 91, 63],
+        borderColor: 'transparent',
+        backgroundColor: '#1e4976',
+        pointRadius: 6,
+        showLine: false,
+      },
+    ],
   };
 
-  const doughnutOptions = {
+  const correlationOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    cutout: '70%',
-    plugins: {
-      legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { size: 12, family: 'Inter' } } },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { title: { display: true, text: 'Capaian Kinerja (%)', font: { size: 10, family: 'Inter' } }, grid: { color: '#f0f0f0' } },
+      y: { title: { display: true, text: 'Serapan (%)', font: { size: 10, family: 'Inter' } }, min: 40, max: 100, grid: { color: '#f0f0f0' } },
     },
   };
 
@@ -169,17 +235,43 @@ export default function Dashboard() {
       {/* Quick Role Switcher Banner */}
       <RoleQuickSwitcher />
 
-      {/* Page Header */}
+      {/* Page Header with Bidang Filters & Actions */}
       <div className="page-header-actions mb-3">
         <div className="page-header">
-          <h1>Dashboard Kinerja Renstra</h1>
+          <h1>Dashboard Utama Kinerja & Analitik Renstra</h1>
           <p>
-            {userBidang && userBidang !== 'Semua'
-              ? `Ringkasan Kinerja & Realisasi Khusus Bidang ${userBidang} — Tahun 2025`
+            {activeScopeBidang !== 'Semua'
+              ? `Ringkasan Kinerja, Realisasi & Analisis Khusus Bidang ${activeScopeBidang} — Tahun 2025`
               : 'Sistem Informasi Perencanaan & Capaian Kinerja Dinas Kesehatan Kabupaten Garut 2025'}
           </p>
         </div>
-        <div className="page-actions">
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Bidang Filter Pills */}
+          {(!userBidang || userBidang === 'Semua') && (
+            <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-card)', padding: '4px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
+              {['Semua', 'Kesmas', 'P2P', 'Yankes', 'SDK'].map(b => (
+                <button
+                  key={b}
+                  onClick={() => setSelectedBidang(b)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    border: 'none',
+                    background: selectedBidang === b ? '#0f2744' : 'transparent',
+                    color: selectedBidang === b ? 'white' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {b}
+                </button>
+              ))}
+            </div>
+          )}
+
           <button className="btn btn-outline" onClick={() => window.print()}>
             <Download size={16} /> Ekspor Laporan
           </button>
@@ -189,18 +281,28 @@ export default function Dashboard() {
       {loading ? (
         <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
           <Loader2 className="animate-spin" size={36} style={{ margin: '0 auto 16px auto' }} />
-          <h3>Memuat data Dashboard dari Supabase Database...</h3>
+          <h3>Memuat data Dashboard Utama dari Supabase Database...</h3>
         </div>
       ) : (
         <>
-          {/* Main Top Stat Cards Grid */}
-          <div className="stats-grid">
+          {/* Top Primary Stat Cards Grid */}
+          <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+            <StatCard
+              label="TOTAL PERENCANAAN"
+              value={stats.totalPerencanaan}
+              color="purple"
+              icon={<FileText size={22} />}
+              subtitle="Dokumen sasaran & indikator"
+              badge="Renstra"
+              badgeType="info"
+              to="/perencanaan"
+            />
             <StatCard
               label="TOTAL PROGRAM"
               value={stats.totalProgram}
               color="blue"
-              icon={<FolderKanban size={24} />}
-              subtitle={`${stats.tercapai} program telah mencapai target`}
+              icon={<FolderKanban size={22} />}
+              subtitle={`${stats.tercapai} program target tercapai`}
               badge={`${stats.tercapai} Tercapai`}
               badgeType="success"
               to="/program"
@@ -209,8 +311,8 @@ export default function Dashboard() {
               label="TOTAL KEGIATAN"
               value={stats.totalKegiatan}
               color="green"
-              icon={<ListChecks size={24} />}
-              subtitle="Tersebar di seluruh bidang Dinkes"
+              icon={<ListChecks size={22} />}
+              subtitle="Pelaksanaan kegiatan bidang"
               badge="Aktif"
               badgeType="info"
               to="/kegiatan"
@@ -219,27 +321,37 @@ export default function Dashboard() {
               label="TOTAL SUB KEGIATAN"
               value={stats.totalSubKegiatan}
               color="teal"
-              icon={<CalendarCheck size={24} />}
-              subtitle="Pelaksanaan di lapangan & puskesmas"
+              icon={<CalendarCheck size={22} />}
+              subtitle="Pelaksanaan teknis & puskesmas"
               badge="Terjadwal"
               badgeType="info"
               to="/sub-kegiatan"
             />
             <StatCard
-              label="JUMLAH BIDANG"
-              value={stats.totalBidang}
-              color="purple"
-              icon={<Building2 size={24} />}
-              subtitle="Bidang & sekretariat Dinkes"
-              badge="Garut"
+              label="AVG CAPAIAN KINERJA"
+              value={`${stats.avgCapaian}%`}
+              color="orange"
+              icon={<CheckCircle2 size={22} />}
+              subtitle={`Target rata-rata kumulatif`}
+              badge={stats.avgCapaian >= 80 ? 'Sangat Baik' : 'Perlu Perhatian'}
+              badgeType={stats.avgCapaian >= 80 ? 'success' : 'warning'}
+              to="/program"
+            />
+            <StatCard
+              label="REALISASI ANGGARAN"
+              value={`${stats.realisasiPersen}%`}
+              color="red"
+              icon={<Wallet size={22} />}
+              subtitle={`${formatAnggaranShort(stats.totalRealisasi)} / ${formatAnggaranShort(stats.totalAnggaran)}`}
+              badge="Pagu"
               badgeType="info"
-              to="/perencanaan"
+              to="/program"
             />
           </div>
 
-          {/* Secondary Kinerja & Anggaran Stat Grid */}
+          {/* Secondary Kinerja & Anggaran Summary Cards */}
           <div className="grid-4" style={{ marginBottom: '24px' }}>
-            <div className="card" onClick={() => navigate('/monitoring')} style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Monitoring">
+            <div className="card" onClick={() => navigate('/program')} style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Program">
               <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px' }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--green-light)', color: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <CheckCircle2 size={24} />
@@ -281,7 +393,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="card" onClick={() => navigate('/evaluasi')} style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Evaluasi">
+            <div className="card" onClick={() => navigate('/program')} style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }} title="Klik untuk melihat Program">
               <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px' }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--red-light)', color: 'var(--red)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <XCircle size={24} />
@@ -296,73 +408,215 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Charts Row */}
-          <div className="grid-3-1" style={{ marginBottom: '24px' }}>
+          {/* Analytics Row 1: Capaian vs Realisasi & Status Distribution */}
+          <div className="grid-2" style={{ marginBottom: '24px' }}>
+            {/* Capaian Kinerja vs Realisasi Anggaran per Bidang */}
             <div className="card">
               <div className="card-header">
-                <h3>Capaian Per Bidang (Target vs Realisasi)</h3>
-                <span className="badge badge-info">2025</span>
+                <div>
+                  <h3>Capaian Kinerja vs Realisasi Anggaran per Bidang</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Perbandingan persentase capaian kinerja (%) & serapan anggaran (dalam juta rupiah)
+                  </p>
+                </div>
               </div>
               <div className="card-body">
-                <div className="chart-container" style={{ height: '280px' }}>
-                  <Bar data={barChartData} options={barChartOptions} />
+                <div style={{ height: '280px' }}>
+                  <Bar data={groupedBarData} options={groupedBarOptions} />
                 </div>
               </div>
             </div>
 
+            {/* Status Distribution Donut Chart */}
             <div className="card">
               <div className="card-header">
-                <h3>Status Program</h3>
+                <div>
+                  <h3>Distribusi Status Program</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Komposisi pencapaian target seluruh program
+                  </p>
+                </div>
               </div>
-              <div className="card-body">
-                <div className="chart-container" style={{ height: '240px' }}>
+              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ width: '160px', height: '160px', marginBottom: '16px' }}>
                   <Doughnut data={doughnutData} options={doughnutOptions} />
+                </div>
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#00a86b' }} />
+                      Tercapai
+                    </span>
+                    <span style={{ fontWeight: 700 }}>{stats.tercapai} ({statusTotal > 0 ? Math.round((stats.tercapai / statusTotal) * 100) : 0}%)</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ff9800' }} />
+                      Dalam Proses
+                    </span>
+                    <span style={{ fontWeight: 700 }}>{stats.proses} ({statusTotal > 0 ? Math.round((stats.proses / statusTotal) * 100) : 0}%)</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f44336' }} />
+                      Belum Tercapai
+                    </span>
+                    <span style={{ fontWeight: 700 }}>{stats.belumTercapai} ({statusTotal > 0 ? Math.round((stats.belumTercapai / statusTotal) * 100) : 0}%)</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Bottom Grid: Line Chart & Recent Activity */}
-          <div className="grid-2">
+          {/* Analytics Row 2: Tren Bulanan & Korelasi */}
+          <div className="grid-2" style={{ marginBottom: '24px' }}>
             <div className="card">
               <div className="card-header">
-                <h3>Perkembangan Capaian Bulanan (2025)</h3>
+                <div>
+                  <h3>Perkembangan Capaian Bulanan (2025)</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Progres perkembangan rata-rata indikator kinerja dari bulan ke bulan
+                  </p>
+                </div>
               </div>
               <div className="card-body">
-                <div className="chart-container" style={{ height: '240px' }}>
+                <div style={{ height: '240px' }}>
                   <Line data={lineChartData} options={lineChartOptions} />
                 </div>
               </div>
             </div>
 
-            {/* Program Table Preview */}
             <div className="card">
               <div className="card-header">
-                <h3>Daftar Program Supabase Terbaru</h3>
-              </div>
-              <div className="card-body" style={{ padding: 0 }}>
-                <div className="table-responsive">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>NAMA PROGRAM</th>
-                        <th>BIDANG</th>
-                        <th>STATUS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {programs.slice(0, 5).map(p => (
-                        <tr key={p.id}>
-                          <td>
-                            <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{p.nama}</div>
-                          </td>
-                          <td><span className={`badge-bidang badge-${getBidangColor(p.bidang)}`}>{p.bidang}</span></td>
-                          <td><StatusBadge status={p.status} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div>
+                  <h3>Korelasi Capaian Kinerja vs Serapan Anggaran</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Titik program; posisi ideal di kuadran kanan atas
+                  </p>
                 </div>
+              </div>
+              <div className="card-body">
+                <div style={{ height: '240px' }}>
+                  <Line data={correlationData} options={correlationOptions} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Top 5 Program & Attention Programs Highlights */}
+          <div className="grid-2" style={{ marginBottom: '24px' }}>
+            <div className="card">
+              <div className="card-header">
+                <div>
+                  <h3>🏆 Top 5 Program Terbaik</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Program dengan tingkat capaian fisik tertinggi
+                  </p>
+                </div>
+              </div>
+              <div className="card-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {sortedTopPrograms.map((p, idx) => (
+                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{
+                        width: '24px', height: '24px', borderRadius: '50%', background: '#0f2744', color: 'white',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0
+                      }}>
+                        {idx + 1}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {p.nama}
+                        </div>
+                        <div className="progress-bar" style={{ marginTop: '4px' }}>
+                          <div className="progress-track" style={{ height: '6px' }}>
+                            <div className={`progress-fill ${getProgressColor(p.capaian)}`} style={{ width: `${Math.min(p.capaian || 0, 100)}%`, height: '6px' }} />
+                          </div>
+                        </div>
+                      </div>
+                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: Math.min(p.capaian || 0, 100) >= 90 ? 'var(--green)' : 'var(--orange)' }}>
+                        {Math.min(p.capaian || 0, 100)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <div>
+                  <h3>⚠ 5 Program Perlu Perhatian</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Program dengan tingkat capaian fisik di bawah target
+                  </p>
+                </div>
+              </div>
+              <div className="card-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {sortedAttentionPrograms.map((p, idx) => (
+                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{
+                        width: '24px', height: '24px', borderRadius: '50%',
+                        background: (p.capaian || 0) < 80 ? 'var(--orange)' : '#00a86b', color: 'white',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0
+                      }}>
+                        {idx + 1}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {p.nama}
+                        </div>
+                        <div className="progress-bar" style={{ marginTop: '4px' }}>
+                          <div className="progress-track" style={{ height: '6px' }}>
+                            <div className={`progress-fill ${getProgressColor(p.capaian)}`} style={{ width: `${Math.min(p.capaian || 0, 100)}%`, height: '6px' }} />
+                          </div>
+                        </div>
+                      </div>
+                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: Math.min(p.capaian || 0, 100) < 80 ? 'var(--orange)' : 'var(--green)' }}>
+                        {Math.min(p.capaian || 0, 100)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Program Table Preview */}
+          <div className="card">
+            <div className="card-header">
+              <h3>Daftar Program Supabase Terbaru</h3>
+              <button className="btn btn-sm btn-outline" onClick={() => navigate('/program')}>
+                Lihat Semua Program ({scopedPrograms.length})
+              </button>
+            </div>
+            <div className="card-body" style={{ padding: 0 }}>
+              <div className="table-responsive">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>NAMA PROGRAM</th>
+                      <th>BIDANG</th>
+                      <th>CAPAIAN FISIK</th>
+                      <th>STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scopedPrograms.slice(0, 5).map(p => (
+                      <tr key={p.id}>
+                        <td>
+                          <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{p.nama}</div>
+                        </td>
+                        <td><span className={`badge-bidang badge-${getBidangColor(p.bidang)}`}>{p.bidang}</span></td>
+                        <td>
+                          <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{Math.min(p.capaian || 0, 100)}%</span>
+                        </td>
+                        <td><StatusBadge status={p.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

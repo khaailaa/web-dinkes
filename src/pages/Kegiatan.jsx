@@ -3,6 +3,7 @@ import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import FilterSearchBar from '../components/FilterSearchBar';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import { formatAnggaranShort, statusList } from '../data/initialData';
 import { useKegiatan, usePrograms } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
@@ -28,7 +29,7 @@ const emptyForm = {
 export default function Kegiatan() {
   const { kegiatan, loading, addKegiatan, updateKegiatan, deleteKegiatan } = useKegiatan();
   const { programs } = usePrograms();
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const currentUser = state.currentUser;
   const userBidang = currentUser?.bidang;
 
@@ -125,9 +126,11 @@ export default function Kegiatan() {
   };
 
   const handleDelete = async (id) => {
+    if (!id) return;
     try {
       setSaving(true);
       await deleteKegiatan(id);
+      dispatch({ type: 'DELETE_KEGIATAN', payload: id });
       setShowDelete(null);
     } catch (err) {
       alert('Gagal menghapus kegiatan: ' + err.message);
@@ -387,21 +390,12 @@ export default function Kegiatan() {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal
+      <ConfirmDeleteModal
         isOpen={!!showDelete}
         onClose={() => setShowDelete(null)}
-        title="Konfirmasi Hapus"
-        footer={
-          <>
-            <button className="btn btn-outline" onClick={() => setShowDelete(null)}>Batal</button>
-            <button className="btn btn-danger" onClick={() => handleDelete(showDelete)} disabled={saving}>
-              {saving ? 'Menghapus...' : 'Hapus'}
-            </button>
-          </>
-        }
-      >
-        <p>Apakah Anda yakin ingin menghapus kegiatan ini?</p>
-      </Modal>
+        onConfirm={() => handleDelete(showDelete)}
+        itemName="kegiatan ini"
+      />
     </div>
   );
 }

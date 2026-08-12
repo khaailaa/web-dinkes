@@ -4,8 +4,6 @@ import {
   initialPrograms,
   initialKegiatan,
   initialSubKegiatan,
-  initialMonitoring,
-  initialEvaluasi,
   initialUsers,
   initialActivities,
   ACCOUNT_PRESETS,
@@ -33,7 +31,7 @@ function saveToStorage(state) {
   }
 }
 
-const DATA_VERSION = 5; // increment for account presets update
+const DATA_VERSION = 6; // increment for account presets update & monev removal
 
 const defaultState = {
   _version: DATA_VERSION,
@@ -42,8 +40,6 @@ const defaultState = {
   programs: initialPrograms,
   kegiatan: initialKegiatan,
   subKegiatan: initialSubKegiatan,
-  monitoring: initialMonitoring,
-  evaluasi: initialEvaluasi,
   users: initialUsers,
   activities: initialActivities,
   selectedYear: 2025,
@@ -66,7 +62,7 @@ function getInitialState() {
       return { ...defaultState, _version: DATA_VERSION };
     }
     // Ensure all required arrays exist and are arrays
-    const required = ['perencanaan','programs','kegiatan','subKegiatan','monitoring','evaluasi','users','activities'];
+    const required = ['perencanaan','programs','kegiatan','subKegiatan','users','activities'];
     for (const key of required) {
       if (!Array.isArray(stored[key])) {
         localStorage.removeItem(STORAGE_KEY);
@@ -109,7 +105,7 @@ function handleUpdateItem(state, key, label, item) {
   const labelText = item.nama || item.periode || item.tujuan || '';
   return {
     ...state,
-    [key]: state[key].map(i => i.id === item.id ? item : i),
+    [key]: state[key].map(i => String(i.id) === String(item.id) ? item : i),
     activities: label ? [createActivity(state, `Memperbarui ${label}${labelText ? ': ' + labelText : ''}`, 'green'), ...state.activities] : state.activities,
   };
 }
@@ -117,7 +113,7 @@ function handleUpdateItem(state, key, label, item) {
 function handleDeleteItem(state, key, label, id) {
   return {
     ...state,
-    [key]: state[key].filter(i => i.id !== id),
+    [key]: state[key].filter(i => String(i.id) !== String(id)),
     activities: label ? [createActivity(state, `Menghapus ${label}`, 'red'), ...state.activities] : state.activities,
   };
 }
@@ -167,28 +163,6 @@ function reducer(state, action) {
       break;
     case 'DELETE_SUB_KEGIATAN':
       newState = handleDeleteItem(state, 'subKegiatan', 'sub kegiatan', action.payload);
-      break;
-
-    // Monitoring
-    case 'ADD_MONITORING':
-      newState = handleAddItem(state, 'monitoring', 'monitoring', action.payload);
-      break;
-    case 'UPDATE_MONITORING':
-      newState = handleUpdateItem(state, 'monitoring', null, action.payload);
-      break;
-    case 'DELETE_MONITORING':
-      newState = handleDeleteItem(state, 'monitoring', null, action.payload);
-      break;
-
-    // Evaluasi
-    case 'ADD_EVALUASI':
-      newState = handleAddItem(state, 'evaluasi', 'evaluasi', action.payload);
-      break;
-    case 'UPDATE_EVALUASI':
-      newState = handleUpdateItem(state, 'evaluasi', null, action.payload);
-      break;
-    case 'DELETE_EVALUASI':
-      newState = handleDeleteItem(state, 'evaluasi', null, action.payload);
       break;
 
     // Users & Authentication

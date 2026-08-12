@@ -27,7 +27,7 @@ const emptyForm = {
 
 export default function Perencanaan() {
   const { perencanaan, loading, addTujuan, updateTujuan, deleteTujuan } = usePerencanaan();
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const currentUser = state.currentUser;
   const userBidang = currentUser?.bidang;
 
@@ -115,9 +115,11 @@ export default function Perencanaan() {
   };
 
   const handleDelete = async (id) => {
+    if (!id) return;
     try {
       setSaving(true);
       await deleteTujuan(id);
+      dispatch({ type: 'DELETE_PERENCANAAN', payload: id });
       setShowDelete(null);
     } catch (err) {
       alert('Gagal menghapus perencanaan: ' + err.message);

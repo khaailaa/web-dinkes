@@ -7,6 +7,36 @@ import {
   initialSubKegiatan,
 } from '../data/initialData';
 
+const DELETED_STORAGE_KEY = 'sipk_garut_deleted_items';
+
+function getDeletedIds(type) {
+  try {
+    const raw = localStorage.getItem(DELETED_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed[type] || [];
+    }
+  } catch (e) {
+    console.error('Failed to parse deleted items from localStorage:', e);
+  }
+  return [];
+}
+
+function saveDeletedId(type, id) {
+  try {
+    const raw = localStorage.getItem(DELETED_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const existing = parsed[type] || [];
+    const idStr = String(id);
+    if (!existing.includes(idStr)) {
+      parsed[type] = [...existing, idStr];
+      localStorage.setItem(DELETED_STORAGE_KEY, JSON.stringify(parsed));
+    }
+  } catch (e) {
+    console.error('Failed to save deleted item to localStorage:', e);
+  }
+}
+
 // Hook for Perencanaan (Renstra Tujuan & Sasaran)
 export function usePerencanaan() {
   const [perencanaan, setPerencanaan] = useState([]);
@@ -14,6 +44,7 @@ export function usePerencanaan() {
   const [error, setError] = useState(null);
 
   const fetchPerencanaan = useCallback(async () => {
+    const deletedIds = getDeletedIds('perencanaan');
     try {
       const { data: tujuanData, error: tujuanErr } = await supabase
         .from('renstra_tujuan')
@@ -67,13 +98,13 @@ export function usePerencanaan() {
             raw: t,
           };
         });
-        setPerencanaan(formatted);
+        setPerencanaan(formatted.filter(p => !deletedIds.includes(String(p.id))));
       } else {
-        setPerencanaan(initialPerencanaan);
+        setPerencanaan(initialPerencanaan.filter(p => !deletedIds.includes(String(p.id))));
       }
     } catch (err) {
       console.warn('Falling back to initialPerencanaan:', err.message);
-      setPerencanaan(initialPerencanaan);
+      setPerencanaan(initialPerencanaan.filter(p => !deletedIds.includes(String(p.id))));
       setError(err.message);
     } finally {
       setLoading(false);
@@ -81,7 +112,6 @@ export function usePerencanaan() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPerencanaan();
   }, [fetchPerencanaan]);
 
@@ -116,21 +146,41 @@ export function usePerencanaan() {
       if (error) throw error;
       await fetchPerencanaan();
     } catch {
-      setPerencanaan(prev => prev.map(p => p.id === id ? { ...p, ...updated } : p));
+      setPerencanaan(prev => prev.map(p => String(p.id) === String(id) ? { ...p, ...updated } : p));
     }
   };
 
   const deleteTujuan = async (id) => {
     try {
+      // Cascade delete child records in Supabase (sasaran -> program -> kegiatan -> sub_kegiatan)
+      const { data: sasData } = await supabase.from('renstra_sasaran').select('id').eq('tujuan_id', id);
+      if (sasData && sasData.length > 0) {
+        const sasIds = sasData.map(s => s.id);
+        const { data: prgData } = await supabase.from('renstra_program').select('id').in('sasaran_id', sasIds);
+        if (prgData && prgData.length > 0) {
+          const prgIds = prgData.map(p => p.id);
+          const { data: kegData } = await supabase.from('renstra_kegiatan').select('id').in('program_id', prgIds);
+          if (kegData && kegData.length > 0) {
+            const kegIds = kegData.map(k => k.id);
+            await supabase.from('renstra_sub_kegiatan').delete().in('kegiatan_id', kegIds);
+          }
+          await supabase.from('renstra_kegiatan').delete().in('program_id', prgIds);
+          await supabase.from('renstra_program').delete().in('sasaran_id', sasIds);
+        }
+        await supabase.from('renstra_sasaran').delete().eq('tujuan_id', id);
+      }
+
       const { error } = await supabase
         .from('renstra_tujuan')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
-      await fetchPerencanaan();
-    } catch {
-      setPerencanaan(prev => prev.filter(p => p.id !== id));
+      if (error) console.error('Supabase delete error for tujuan:', error);
+    } catch (err) {
+      console.error('Exception deleting tujuan:', err);
+    } finally {
+      saveDeletedId('perencanaan', id);
+      setPerencanaan(prev => prev.filter(p => String(p.id) !== String(id)));
     }
   };
 
@@ -144,6 +194,7 @@ export function usePrograms() {
   const [error, setError] = useState(null);
 
   const fetchPrograms = useCallback(async () => {
+    const deletedIds = getDeletedIds('programs');
     try {
       const { data, error: err } = await supabase
         .from('renstra_program')
@@ -182,13 +233,13 @@ export function usePrograms() {
             raw: p,
           };
         });
-        setPrograms(formatted);
+        setPrograms(formatted.filter(p => !deletedIds.includes(String(p.id))));
       } else {
-        setPrograms(initialPrograms);
+        setPrograms(initialPrograms.filter(p => !deletedIds.includes(String(p.id))));
       }
     } catch (err) {
       console.warn('Falling back to initialPrograms:', err.message);
-      setPrograms(initialPrograms);
+      setPrograms(initialPrograms.filter(p => !deletedIds.includes(String(p.id))));
       setError(err.message);
     } finally {
       setLoading(false);
@@ -196,7 +247,6 @@ export function usePrograms() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPrograms();
   }, [fetchPrograms]);
 
@@ -243,21 +293,31 @@ export function usePrograms() {
       if (error) throw error;
       await fetchPrograms();
     } catch {
-      setPrograms(prev => prev.map(p => p.id === id ? { ...p, ...updated } : p));
+      setPrograms(prev => prev.map(p => String(p.id) === String(id) ? { ...p, ...updated } : p));
     }
   };
 
   const deleteProgram = async (id) => {
     try {
+      // Cascade delete child kegiatan & sub_kegiatan first in Supabase
+      const { data: childKeg } = await supabase.from('renstra_kegiatan').select('id').eq('program_id', id);
+      if (childKeg && childKeg.length > 0) {
+        const kegIds = childKeg.map(k => k.id);
+        await supabase.from('renstra_sub_kegiatan').delete().in('kegiatan_id', kegIds);
+        await supabase.from('renstra_kegiatan').delete().eq('program_id', id);
+      }
+
       const { error } = await supabase
         .from('renstra_program')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
-      await fetchPrograms();
-    } catch {
-      setPrograms(prev => prev.filter(p => p.id !== id));
+      if (error) console.error('Supabase delete error for program:', error);
+    } catch (err) {
+      console.error('Exception deleting program:', err);
+    } finally {
+      saveDeletedId('programs', id);
+      setPrograms(prev => prev.filter(p => String(p.id) !== String(id)));
     }
   };
 
@@ -271,6 +331,7 @@ export function useKegiatan() {
   const [error, setError] = useState(null);
 
   const fetchKegiatan = useCallback(async () => {
+    const deletedIds = getDeletedIds('kegiatan');
     try {
       const { data, error: err } = await supabase
         .from('renstra_kegiatan')
@@ -306,13 +367,13 @@ export function useKegiatan() {
             raw: k,
           };
         });
-        setKegiatan(formatted);
+        setKegiatan(formatted.filter(k => !deletedIds.includes(String(k.id))));
       } else {
-        setKegiatan(initialKegiatan);
+        setKegiatan(initialKegiatan.filter(k => !deletedIds.includes(String(k.id))));
       }
     } catch (err) {
       console.warn('Falling back to initialKegiatan:', err.message);
-      setKegiatan(initialKegiatan);
+      setKegiatan(initialKegiatan.filter(k => !deletedIds.includes(String(k.id))));
       setError(err.message);
     } finally {
       setLoading(false);
@@ -320,7 +381,6 @@ export function useKegiatan() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchKegiatan();
   }, [fetchKegiatan]);
 
@@ -367,21 +427,26 @@ export function useKegiatan() {
       if (error) throw error;
       await fetchKegiatan();
     } catch {
-      setKegiatan(prev => prev.map(k => k.id === id ? { ...k, ...updated } : k));
+      setKegiatan(prev => prev.map(k => String(k.id) === String(id) ? { ...k, ...updated } : k));
     }
   };
 
   const deleteKegiatan = async (id) => {
     try {
+      // Cascade delete child sub_kegiatan first in Supabase
+      await supabase.from('renstra_sub_kegiatan').delete().eq('kegiatan_id', id);
+
       const { error } = await supabase
         .from('renstra_kegiatan')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
-      await fetchKegiatan();
-    } catch {
-      setKegiatan(prev => prev.filter(k => k.id !== id));
+      if (error) console.error('Supabase delete error for kegiatan:', error);
+    } catch (err) {
+      console.error('Exception deleting kegiatan:', err);
+    } finally {
+      saveDeletedId('kegiatan', id);
+      setKegiatan(prev => prev.filter(k => String(k.id) !== String(id)));
     }
   };
 
@@ -395,6 +460,7 @@ export function useSubKegiatan() {
   const [error, setError] = useState(null);
 
   const fetchSubKegiatan = useCallback(async () => {
+    const deletedIds = getDeletedIds('subKegiatan');
     try {
       const { data, error: err } = await supabase
         .from('renstra_sub_kegiatan')
@@ -430,13 +496,13 @@ export function useSubKegiatan() {
             raw: sk,
           };
         });
-        setSubKegiatan(formatted);
+        setSubKegiatan(formatted.filter(sk => !deletedIds.includes(String(sk.id))));
       } else {
-        setSubKegiatan(initialSubKegiatan);
+        setSubKegiatan(initialSubKegiatan.filter(sk => !deletedIds.includes(String(sk.id))));
       }
     } catch (err) {
       console.warn('Falling back to initialSubKegiatan:', err.message);
-      setSubKegiatan(initialSubKegiatan);
+      setSubKegiatan(initialSubKegiatan.filter(sk => !deletedIds.includes(String(sk.id))));
       setError(err.message);
     } finally {
       setLoading(false);
@@ -444,7 +510,6 @@ export function useSubKegiatan() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchSubKegiatan();
   }, [fetchSubKegiatan]);
 
@@ -491,7 +556,7 @@ export function useSubKegiatan() {
       if (error) throw error;
       await fetchSubKegiatan();
     } catch {
-      setSubKegiatan(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s));
+      setSubKegiatan(prev => prev.map(s => String(s.id) === String(id) ? { ...s, ...updated } : s));
     }
   };
 
@@ -502,10 +567,12 @@ export function useSubKegiatan() {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
-      await fetchSubKegiatan();
-    } catch {
-      setSubKegiatan(prev => prev.filter(s => s.id !== id));
+      if (error) console.error('Supabase delete error for sub kegiatan:', error);
+    } catch (err) {
+      console.error('Exception deleting sub kegiatan:', err);
+    } finally {
+      saveDeletedId('subKegiatan', id);
+      setSubKegiatan(prev => prev.filter(s => String(s.id) !== String(id)));
     }
   };
 
