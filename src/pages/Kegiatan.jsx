@@ -4,7 +4,7 @@ import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import FilterSearchBar from '../components/FilterSearchBar';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import { formatAnggaranShort, statusList, getSubBidangOptions, normalizeBidangUtama } from '../data/initialData';
+import { formatAnggaranShort, statusList, getSubBidangOptions, normalizeBidangUtama, ALL_SUB_BIDANG_LIST, isItemInUserBidang } from '../data/initialData';
 import { useKegiatan, usePrograms } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
 import { Plus, Search, ListChecks, CheckCircle2, Clock, XCircle, Trash2, Edit3, Loader2 } from 'lucide-react';
@@ -35,6 +35,7 @@ export default function Kegiatan() {
 
   const [showModal, setShowModal] = useState(false);
   const [showDelete, setShowDelete] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
   const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState('');
@@ -43,11 +44,23 @@ export default function Kegiatan() {
   const [filterAnggaran, setFilterAnggaran] = useState('Semua');
   const [saving, setSaving] = useState(false);
 
-  // Base data filtered by selected bidang (available for all roles)
+  const userBidangScope = currentUser?.canViewAllBidang ? null : currentUser?.bidang;
+
+  const availablePrograms = useMemo(() => {
+    if (!userBidangScope || userBidangScope === 'Semua') return programs;
+    return programs.filter(p => isItemInUserBidang(p.bidang, userBidangScope));
+  }, [programs, userBidangScope]);
+
+  // Base data filtered by user's assigned bidang AND selected sub-bidang filter
+  const userScopedKegiatan = useMemo(() => {
+    if (!userBidangScope || userBidangScope === 'Semua') return kegiatan;
+    return kegiatan.filter(k => isItemInUserBidang(k.bidang, userBidangScope));
+  }, [kegiatan, userBidangScope]);
+
   const bidangFilteredData = useMemo(() => {
-    if (!filterBidang || filterBidang === 'Semua') return kegiatan;
-    return kegiatan.filter(k => k.bidang === filterBidang);
-  }, [kegiatan, filterBidang]);
+    if (!filterBidang || filterBidang === 'Semua') return userScopedKegiatan;
+    return userScopedKegiatan.filter(k => k.bidang === filterBidang);
+  }, [userScopedKegiatan, filterBidang]);
 
   const stats = useMemo(() => ({
     total: bidangFilteredData.length,
@@ -101,7 +114,7 @@ export default function Kegiatan() {
 
   const openAdd = () => {
     setEditItem(null);
-    const firstProg = programs.length > 0 ? programs[0] : null;
+    const firstProg = availablePrograms.length > 0 ? availablePrograms[0] : (programs.length > 0 ? programs[0] : null);
     const subOpts = getSubBidangOptions(firstProg?.bidang);
     setForm({
       ...emptyForm,
@@ -113,7 +126,7 @@ export default function Kegiatan() {
 
   const openEdit = (item) => {
     setEditItem(item);
-    const pId = item.programId || (programs.length > 0 ? programs[0].id : '');
+    const pId = item.programId || (availablePrograms.length > 0 ? availablePrograms[0].id : (programs.length > 0 ? programs[0].id : ''));
     const p = programs.find(pr => String(pr.id) === String(pId));
     const subOpts = getSubBidangOptions(p?.bidang);
     setForm({
@@ -227,6 +240,8 @@ export default function Kegiatan() {
             filterLabel="Semua Status"
             bidangValue={filterBidang}
             onBidangChange={setFilterBidang}
+            bidangOptions={ALL_SUB_BIDANG_LIST}
+            bidangLabel="Semua Sub Bagian / Seksi"
             anggaranValue={filterAnggaran}
             onAnggaranChange={setFilterAnggaran}
             placeholder="Cari kode atau nama kegiatan..."
@@ -245,6 +260,7 @@ export default function Kegiatan() {
                 <tr>
                   <th>KODE</th>
                   <th>NAMA KEGIATAN</th>
+                  <th>SUB-BIDANG / SEKSI</th>
                   <th>PROGRAM PARENT</th>
                   <th>SASARAN</th>
                   <th>INDIKATOR</th>
@@ -271,21 +287,26 @@ export default function Kegiatan() {
                   else if (pct < 90) barColor = '#2196f3';
 
                   return (
-                    <tr key={item.id}>
-                      <td><span className="code-badge">{item.kode || '-'}</span></td>
-                      <td>
+                    <tr key={item.id} style={{ cursor: 'pointer' }}>
+                      <td onClick={() => setDetailItem(item)}><span className="code-badge">{item.kode || '-'}</span></td>
+                      <td onClick={() => setDetailItem(item)}>
                         <div style={{ fontWeight: 600, color: '#2196f3' }}>{item.nama}</div>
                       </td>
-                      <td>
+                      <td onClick={() => setDetailItem(item)}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0369a1', background: '#e0f2fe', padding: '4px 8px', borderRadius: '4px', display: 'inline-block' }}>
+                          {item.bidang || 'Seksi Kesehatan Keluarga dan Gizi'}
+                        </span>
+                      </td>
+                      <td onClick={() => setDetailItem(item)}>
                         <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 500 }}>
                           {parentProg ? parentProg.nama : (item.programNama || 'Program Pemenuhan Upaya Kesehatan')}
                         </div>
                       </td>
-                      <td><div style={{ fontSize: '0.82rem' }}>{item.sasaran || '-'}</div></td>
-                      <td><div style={{ fontSize: '0.82rem' }}>{item.indikator || '-'}</div></td>
-                      <td><div style={{ fontSize: '0.82rem', textAlign: 'center' }}>{item.target || '-'}</div></td>
-                      <td>{formatAnggaranShort(item.anggaran)}</td>
-                      <td>
+                      <td onClick={() => setDetailItem(item)}><div style={{ fontSize: '0.82rem' }}>{item.sasaran || '-'}</div></td>
+                      <td onClick={() => setDetailItem(item)}><div style={{ fontSize: '0.82rem' }}>{item.indikator || '-'}</div></td>
+                      <td onClick={() => setDetailItem(item)}><div style={{ fontSize: '0.82rem', textAlign: 'center' }}>{item.target || '-'}</div></td>
+                      <td onClick={() => setDetailItem(item)}>{formatAnggaranShort(item.anggaran)}</td>
+                      <td onClick={() => setDetailItem(item)}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '100px' }}>
                           <div style={{ flex: 1, height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
                             <div style={{ height: '100%', width: `${Math.min(Math.max(pct, 0), 100)}%`, background: barColor, borderRadius: '4px' }} />
@@ -293,7 +314,7 @@ export default function Kegiatan() {
                           <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b', minWidth: '38px', textAlign: 'right' }}>{pct}%</span>
                         </div>
                       </td>
-                      <td><StatusBadge status={item.status} /></td>
+                      <td onClick={() => setDetailItem(item)}><StatusBadge status={item.status} /></td>
                       <td>
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <button className="btn btn-outline btn-sm" onClick={() => openEdit(item)}>
@@ -309,7 +330,7 @@ export default function Kegiatan() {
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={10}>
+                    <td colSpan={11}>
                       <div className="empty-state">
                         <div className="icon">📋</div>
                         <h3>Tidak ada data</h3>
@@ -425,6 +446,74 @@ export default function Kegiatan() {
         onConfirm={() => handleDelete(showDelete)}
         itemName="kegiatan ini"
       />
+
+      {/* Detail Modal */}
+      {detailItem && (
+        <Modal
+          isOpen={!!detailItem}
+          size="lg"
+          title={`Detail Kegiatan: [${detailItem.kode || '-'}] ${detailItem.nama}`}
+          onClose={() => setDetailItem(null)}
+        >
+          <div style={{ padding: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <span className="code-badge" style={{ fontSize: '0.9rem', padding: '6px 12px' }}>{detailItem.kode || '01.2.01.0001'}</span>
+                <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f2744', marginTop: '8px', marginBottom: '4px' }}>{detailItem.nama}</h2>
+                <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                  Induk Program: <strong style={{ color: '#2563eb' }}>{programs.find(p => String(p.id) === String(detailItem.programId))?.nama || detailItem.programNama || '-'}</strong>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <StatusBadge status={detailItem.status || 'Dalam Proses'} />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Sub-Bidang / Seksi</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0369a1', marginTop: '4px' }}>{detailItem.bidang || 'Seksi Kesehatan Keluarga dan Gizi'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Anggaran (Rp)</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#2563eb', marginTop: '4px' }}>
+                  Rp {(detailItem.anggaran || detailItem.anggaranPagu || 0).toLocaleString('id-ID')}
+                </div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Ketercapaian Kinerja</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#16a34a', marginTop: '4px' }}>
+                  {detailItem.capaian !== undefined ? detailItem.capaian : 75}%
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: '#f1f5f9', padding: '16px', borderRadius: '10px', marginBottom: '20px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <strong style={{ fontSize: '0.82rem', color: '#475569', display: 'block', marginBottom: '2px' }}>SASARAN KEGIATAN:</strong>
+                <span style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: 500 }}>{detailItem.sasaran || '-'}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <strong style={{ fontSize: '0.82rem', color: '#475569', display: 'block', marginBottom: '2px' }}>INDIKATOR KEGIATAN:</strong>
+                  <span style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: 500 }}>{detailItem.indikator || '-'}</span>
+                </div>
+                <div>
+                  <strong style={{ fontSize: '0.82rem', color: '#475569', display: 'block', marginBottom: '2px' }}>TARGET KEGIATAN:</strong>
+                  <span style={{ fontSize: '0.9rem', color: '#1e293b', fontWeight: 500 }}>{detailItem.target || '-'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button className="btn btn-outline" onClick={() => setDetailItem(null)}>Tutup</button>
+              <button className="btn btn-primary" onClick={() => { const item = detailItem; setDetailItem(null); openEdit(item); }}>
+                <Edit3 size={15} style={{ marginRight: '6px' }} /> Edit Kegiatan Ini
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

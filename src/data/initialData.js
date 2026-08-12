@@ -40,6 +40,8 @@ export const SUB_BIDANG_MAP = {
   ],
 };
 
+export const ALL_SUB_BIDANG_LIST = Object.values(SUB_BIDANG_MAP).flat();
+
 export function normalizeBidangUtama(b) {
   if (!b) return 'Bidang Kesehatan Masyarakat (Kesmas)';
   const str = String(b).toLowerCase();
@@ -66,22 +68,53 @@ export const bidangCodeMap = {
 
 export const statusList = ['Tercapai', 'Dalam Proses', 'Belum Tercapai'];
 
+export function isItemInUserBidang(itemBidang, userBidang) {
+  if (!userBidang || userBidang === 'Semua') return true;
+  if (!itemBidang) return true;
+
+  const normalizedUser = normalizeBidangUtama(userBidang);
+  const normalizedItem = normalizeBidangUtama(itemBidang);
+
+  if (normalizedItem === normalizedUser) return true;
+
+  const userSubList = SUB_BIDANG_MAP[normalizedUser] || [];
+  if (userSubList.includes(itemBidang)) return true;
+
+  return false;
+}
+
 export const ACCOUNT_PRESETS = [
   {
     id: 'admin',
     username: 'admin',
     password: 'admin123',
-    nama: 'Sekretariat / Admin Perencanaan',
-    role: 'Sekretariat / Admin Perencanaan',
+    nama: 'Admin Perencanaan',
+    role: 'Admin Perencanaan (Super Admin)',
     roleKey: 'admin',
     bidang: 'Semua',
     email: 'admin@dinkesgarut.go.id',
     deskripsi: 'Dapat melakukan keseluruhan (Akses Penuh)',
     badgeColor: 'purple',
-    badgeText: 'Sekretariat (Admin)',
+    badgeText: 'Admin Perencanaan (Super Admin)',
     canManageUsers: true,
     canViewTree: true,
     canViewAllBidang: true,
+  },
+  {
+    id: 'sekretariat',
+    username: 'sekretariat',
+    password: 'sekretariat123',
+    nama: 'Admin Bidang Sekretariat',
+    role: 'Admin Bidang (Sekretariat)',
+    roleKey: 'sekretariat',
+    bidang: 'Sekretariat',
+    email: 'sekretariat@dinkesgarut.go.id',
+    deskripsi: 'Akses khusus data Bidang Sekretariat (Tanpa Bagan & Manajemen Pengguna)',
+    badgeColor: 'blue',
+    badgeText: 'Sekretariat',
+    canManageUsers: false,
+    canViewTree: false,
+    canViewAllBidang: false,
   },
   {
     id: 'kesmas',
@@ -90,7 +123,7 @@ export const ACCOUNT_PRESETS = [
     nama: 'Admin Bidang Kesmas',
     role: 'Admin Bidang (Kesmas)',
     roleKey: 'kesmas',
-    bidang: 'Kesmas',
+    bidang: 'Bidang Kesehatan Masyarakat (Kesmas)',
     email: 'kesmas@dinkesgarut.go.id',
     deskripsi: 'Akses khusus data Bidang Kesmas (Tanpa Bagan & Manajemen Pengguna)',
     badgeColor: 'green',
@@ -106,7 +139,7 @@ export const ACCOUNT_PRESETS = [
     nama: 'Admin Bidang P2P',
     role: 'Admin Bidang (P2P)',
     roleKey: 'p2p',
-    bidang: 'P2P',
+    bidang: 'Bidang Pencegahan dan Pengendalian Penyakit (P2P)',
     email: 'p2p@dinkesgarut.go.id',
     deskripsi: 'Akses khusus data Bidang P2P (Tanpa Bagan & Manajemen Pengguna)',
     badgeColor: 'red',
@@ -122,7 +155,7 @@ export const ACCOUNT_PRESETS = [
     nama: 'Admin Bidang Yankes',
     role: 'Admin Bidang (Yankes)',
     roleKey: 'yankes',
-    bidang: 'Yankes',
+    bidang: 'Bidang Pelayanan Kesehatan (Yankes)',
     email: 'yankes@dinkesgarut.go.id',
     deskripsi: 'Akses khusus data Bidang Yankes (Tanpa Bagan & Manajemen Pengguna)',
     badgeColor: 'blue',
@@ -138,7 +171,7 @@ export const ACCOUNT_PRESETS = [
     nama: 'Admin Bidang SDK',
     role: 'Admin Bidang (SDK)',
     roleKey: 'sdk',
-    bidang: 'SDK',
+    bidang: 'Bidang Sumber Daya Kesehatan (SDK)',
     email: 'sdk@dinkesgarut.go.id',
     deskripsi: 'Akses khusus data Bidang SDK (Tanpa Bagan & Manajemen Pengguna)',
     badgeColor: 'orange',

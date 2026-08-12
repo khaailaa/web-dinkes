@@ -10,6 +10,8 @@ export default function FilterSearchBar({
   filterLabel = 'Semua Status',
   bidangValue,
   onBidangChange,
+  bidangOptions,
+  bidangLabel = 'Semua Bidang',
   anggaranValue,
   onAnggaranChange,
   placeholder = 'Cari...'
@@ -35,19 +37,19 @@ export default function FilterSearchBar({
         />
       </div>
 
-      {/* Filter Bidang (if handler provided) */}
+      {/* Filter Bidang / Sub Bagian (if handler provided) */}
       {onBidangChange && (
-        <div style={{ position: 'relative', minWidth: '150px' }}>
+        <div style={{ position: 'relative', minWidth: '170px' }}>
           <select
             className="form-select"
             value={bidangValue || 'Semua'}
             onChange={(e) => onBidangChange(e.target.value)}
             style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 500 }}
           >
-            <option value="Semua">Semua Bidang</option>
-            {bidangList.map((b) => (
+            <option value="Semua">{bidangLabel}</option>
+            {(bidangOptions || bidangList).map((b) => (
               <option key={b} value={b}>
-                Bidang {b}
+                {b.startsWith('Seksi') || b.startsWith('Subbagian') || b.startsWith('Umum') || b.startsWith('Bidang') || b === 'Sekretariat' ? b : `Bidang ${b}`}
               </option>
             ))}
           </select>

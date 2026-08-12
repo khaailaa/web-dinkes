@@ -6,7 +6,6 @@ import Program from './pages/Program';
 import Kegiatan from './pages/Kegiatan';
 import SubKegiatan from './pages/SubKegiatan';
 import Laporan from './pages/Laporan';
-import ManajemenPengguna from './pages/ManajemenPengguna';
 import Pengaturan from './pages/Pengaturan';
 import BaganPohon from './pages/BaganPohon';
 
@@ -21,7 +20,6 @@ function App() {
         <Route path="/sub-kegiatan" element={<SubKegiatan />} />
         <Route path="/laporan" element={<Laporan />} />
         <Route path="/bagan-pohon" element={<BaganPohon />} />
-        <Route path="/manajemen-pengguna" element={<ManajemenPengguna />} />
         <Route path="/pengaturan" element={<Pengaturan />} />
       </Route>
     </Routes>

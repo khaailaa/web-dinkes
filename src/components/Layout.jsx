@@ -18,7 +18,6 @@ const rawMenuItems = [
   { path: '/laporan', label: 'Laporan', icon: FileSpreadsheet, color: '#607d8b' },
   { path: '/bagan-pohon', label: 'Bagan Pohon', icon: GitFork, color: '#8b5cf6' },
   { divider: true },
-  { path: '/manajemen-pengguna', label: 'Manajemen Pengguna', icon: Users, color: '#9c27b0' },
   { path: '/pengaturan', label: 'Pengaturan', icon: Settings, color: '#607d8b' },
 ];
 
@@ -36,17 +35,11 @@ export default function Layout({ children }) {
   const currentUser = state.currentUser || ACCOUNT_PRESETS[0];
   const roleKey = currentUser.roleKey || 'admin';
 
-  // Permission flags based on user specifications:
-  // - Sekretariat (Admin): Full access
-  // - Kepala Dinas (Kadin): All EXCEPT Manajemen Pengguna (Includes Bagan Pohon)
-  // - Bidang (Kesmas, P2P, Yankes, SDK): All EXCEPT Bagan Pohon & Manajemen Pengguna
-  const canManageUsers = currentUser.canManageUsers ?? (roleKey === 'admin');
   const canViewTree = currentUser.canViewTree ?? (roleKey === 'admin' || roleKey === 'kadin');
 
   // Filter sidebar navigation menu items
   const menuItems = rawMenuItems.filter(item => {
     if (item.divider) return true;
-    if (item.path === '/manajemen-pengguna' && !canManageUsers) return false;
     if (item.path === '/bagan-pohon' && !canViewTree) return false;
     return true;
   });
@@ -55,9 +48,7 @@ export default function Layout({ children }) {
   const pageLabel = currentPage?.label || 'Dashboard';
 
   // Check direct URL access restrictions
-  const isRestrictedRoute =
-    (location.pathname === '/manajemen-pengguna' && !canManageUsers) ||
-    (location.pathname === '/bagan-pohon' && !canViewTree);
+  const isRestrictedRoute = location.pathname === '/bagan-pohon' && !canViewTree;
 
   useEffect(() => {
     function handleClickOutside(event) {

@@ -709,7 +709,7 @@ img {
 }
 
 .data-table tbody tr:hover {
-  background: var(--bg-card-hover);
+  background: #f0f7ff !important;
 }
 
 .data-table tbody tr:last-child td {
@@ -940,6 +940,17 @@ img {
   justify-content: center;
   z-index: 200;
   animation: fadeIn 0.2s ease;
+  box-sizing: border-box;
+}
+
+@media (min-width: 1025px) {
+  .modal-overlay {
+    padding-left: 260px;
+    transition: padding-left 0.3s ease;
+  }
+  .sidebar-collapsed .modal-overlay {
+    padding-left: 72px;
+  }
 }
 
 .modal {

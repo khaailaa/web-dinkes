@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import RoleQuickSwitcher from '../components/RoleQuickSwitcher';
-import { formatAnggaranShort, getBidangColor, chartData, bidangList, getProgressColor, normalizeBidangUtama } from '../data/initialData';
+import { formatAnggaranShort, getBidangColor, chartData, bidangList, getProgressColor, normalizeBidangUtama, isItemInUserBidang } from '../data/initialData';
 import { usePrograms, useKegiatan, useSubKegiatan } from '../hooks/useSupabase';
 import {
   FolderKanban, CalendarCheck, ListChecks, FileText,
@@ -37,23 +37,23 @@ export default function Dashboard() {
 
   const [selectedBidang, setSelectedBidang] = useState('Semua');
 
-  // Determine active scope (if logged in user is restricted to a specific Bidang, enforce it)
-  const activeScopeBidang = userBidang && userBidang !== 'Semua' ? userBidang : selectedBidang;
+  const userBidangScope = currentUser?.canViewAllBidang ? null : userBidang;
+  const activeScopeBidang = userBidangScope && userBidangScope !== 'Semua' ? userBidangScope : selectedBidang;
 
   // Filtered data based on active scope
   const scopedPrograms = useMemo(() => {
     if (activeScopeBidang === 'Semua') return programs;
-    return programs.filter(p => !p.bidang || normalizeBidangUtama(p.bidang) === normalizeBidangUtama(activeScopeBidang));
+    return programs.filter(p => isItemInUserBidang(p.bidang, activeScopeBidang));
   }, [programs, activeScopeBidang]);
 
   const scopedKegiatan = useMemo(() => {
     if (activeScopeBidang === 'Semua') return kegiatan;
-    return kegiatan.filter(k => !k.bidang || normalizeBidangUtama(k.bidang) === normalizeBidangUtama(activeScopeBidang));
+    return kegiatan.filter(k => isItemInUserBidang(k.bidang, activeScopeBidang));
   }, [kegiatan, activeScopeBidang]);
 
   const scopedSubKegiatan = useMemo(() => {
     if (activeScopeBidang === 'Semua') return subKegiatan;
-    return subKegiatan.filter(sk => !sk.bidang || normalizeBidangUtama(sk.bidang) === normalizeBidangUtama(activeScopeBidang));
+    return subKegiatan.filter(sk => isItemInUserBidang(sk.bidang, activeScopeBidang));
   }, [subKegiatan, activeScopeBidang]);
 
   // Overall Statistics
@@ -248,7 +248,7 @@ export default function Dashboard() {
           {/* Bidang Filter Pills */}
           {(!userBidang || userBidang === 'Semua') && (
             <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-card)', padding: '4px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
-              {['Semua', 'Kesmas', 'P2P', 'Yankes', 'SDK'].map(b => (
+              {['Semua', 'Sekretariat', 'Kesmas', 'P2P', 'Yankes', 'SDK'].map(b => (
                 <button
                   key={b}
                   onClick={() => setSelectedBidang(b)}

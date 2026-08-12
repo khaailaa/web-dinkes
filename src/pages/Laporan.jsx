@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { formatAnggaranShort } from '../data/initialData';
+import { formatAnggaranShort, isItemInUserBidang } from '../data/initialData';
 import { usePrograms, useKegiatan, useSubKegiatan } from '../hooks/useSupabase';
 import { useApp } from '../context/AppContext';
 import { Printer, Loader2 } from 'lucide-react';
@@ -11,23 +11,23 @@ export default function Laporan() {
   const { subKegiatan, loading: loadingSub } = useSubKegiatan();
   const { state } = useApp();
   const currentUser = state.currentUser;
-  const userBidang = currentUser?.bidang;
+  const userBidang = currentUser?.canViewAllBidang ? null : currentUser?.bidang;
 
   const loading = loadingProg || loadingKeg || loadingSub;
 
   const scopedPrograms = useMemo(() => {
     if (!userBidang || userBidang === 'Semua') return programs;
-    return programs.filter(p => !p.bidang || p.bidang === userBidang);
+    return programs.filter(p => isItemInUserBidang(p.bidang, userBidang));
   }, [programs, userBidang]);
 
   const scopedKegiatan = useMemo(() => {
     if (!userBidang || userBidang === 'Semua') return kegiatan;
-    return kegiatan.filter(k => !k.bidang || k.bidang === userBidang);
+    return kegiatan.filter(k => isItemInUserBidang(k.bidang, userBidang));
   }, [kegiatan, userBidang]);
 
   const scopedSubKegiatan = useMemo(() => {
     if (!userBidang || userBidang === 'Semua') return subKegiatan;
-    return subKegiatan.filter(sk => !sk.bidang || sk.bidang === userBidang);
+    return subKegiatan.filter(sk => isItemInUserBidang(sk.bidang, userBidang));
   }, [subKegiatan, userBidang]);
 
   const stats = useMemo(() => {
